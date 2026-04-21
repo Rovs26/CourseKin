@@ -73,9 +73,9 @@ Commit SHA: c657fe3
 [x] Add pool_pre_ping=True for Neon serverless
 [x] Document migration workflow in DEPLOYMENT.md
 [x] Test: migrate local SQLite (all 5 tables, API boots, health 200)
-[ ] Commit
+[x] Commit
 
-Commit SHA:
+Commit SHA: 77f8435
 Manual follow-ups: run `alembic upgrade head` against Neon production DB
 when deploying. Create a Neon branch for staging.
 Neon test (step 7b) skipped this session — run manually once Neon dev branch exists:
