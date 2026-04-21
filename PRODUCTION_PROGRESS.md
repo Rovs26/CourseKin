@@ -91,9 +91,9 @@ Neon test (step 7b) skipped this session — run manually once Neon dev branch e
 [x] Update frontend upload component to presign → PUT (XHR with progress) → finalize flow
 [x] delete_source also calls storage_service.delete_object for R2-backed sources
 [ ] Test: full upload → generate flow against real R2
-[ ] Commit
+[x] Commit
 
-Commit SHA:
+Commit SHA: 6aa8325
 Manual follow-ups:
 - In Cloudflare R2 dashboard → reviewflow-uploads bucket → Settings → Lifecycle rules:
   1. Delete objects with prefix "temp/" after 7 days
