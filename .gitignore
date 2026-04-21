@@ -13,9 +13,11 @@ node_modules/
 # Logs
 *.log
 
-# Environment
-.env.local
-*.env.local
+# Environment — ignore all .env variants, but keep example templates
+.env
+.env.*
+!.env.example
+!.env.local.example
 
 # Database
 *.db
