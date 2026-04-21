@@ -1,10 +1,11 @@
 import logging
+import tempfile
 from pathlib import Path
 from uuid import uuid4
 
 import requests as http_requests
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser, get_current_user, require_owner
@@ -13,25 +14,26 @@ from app.core.utils import utc_now_iso
 from app.db.database import get_db
 from app.db.models import Project, Source
 from app.schemas.source import (
+    PresignUploadRequest,
+    FinalizeUploadRequest,
     SourceTextCreate,
     SourceUrlCreate,
     SourceResponse,
     SourceListResponse,
 )
-from app.core.config import settings
 from app.core.security import validate_url_safe
+from app.services import storage_service
 from app.services.pdf_service import extract_pdf_text
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Sources"])
 
-UPLOAD_DIR = Path(settings.UPLOAD_DIR)
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-MAX_PDF_SIZE = 20 * 1024 * 1024  # 20 MB
-MAX_TEXT_SIZE = 500 * 1024  # 500 KB
+MAX_PDF_BYTES = 25 * 1024 * 1024   # 25 MB — matches R2 presign cap
+MAX_TEXT_SIZE = 500 * 1024          # 500 KB
 MAX_URL_RESPONSE_SIZE = 5 * 1024 * 1024  # 5 MB
+MIN_TEXT_CHARS = 500
+MAX_TEXT_CHARS = 50_000
 
 
 def _source_to_dict(source: Source):
@@ -45,6 +47,8 @@ def _source_to_dict(source: Source):
         "updated_at": source.updated_at,
     }
 
+
+# ── Text source ───────────────────────────────────────────────────────────────
 
 @router.post("/sources/text", response_model=SourceResponse)
 @limiter.limit("30/hour")
@@ -79,6 +83,8 @@ def create_text_source(
     db.refresh(source)
     return _source_to_dict(source)
 
+
+# ── URL source ────────────────────────────────────────────────────────────────
 
 @router.post("/sources/url", response_model=SourceResponse)
 @limiter.limit("20/hour")
@@ -152,56 +158,103 @@ def create_url_source(
     return _source_to_dict(source)
 
 
-@router.post("/sources/upload", response_model=SourceResponse)
+# ── PDF upload — presign + finalize ──────────────────────────────────────────
+
+@router.post("/sources/upload/presign")
 @limiter.limit("20/hour")
-async def create_upload_source(
+def presign_upload(
     request: Request,
-    project_id: str = Form(...),
-    file: UploadFile = File(...),
+    payload: PresignUploadRequest,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    project = db.get(Project, project_id)
+    """Step 1 of 3 — return a presigned PUT URL for direct browser→R2 upload.
+
+    The client uses this URL to PUT the file bytes directly to R2,
+    then calls /sources/upload/finalize to register the source.
+    """
+    project = db.get(Project, payload.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     require_owner(current_user, project.user_id)
 
-    source_id = str(uuid4())
-    now = utc_now_iso()
+    return storage_service.generate_presigned_put(
+        user_id=current_user.user_id,
+        filename=payload.filename,
+        content_type=payload.content_type,
+    )
 
-    safe_name = file.filename or f"{source_id}.pdf"
-    is_pdf = safe_name.lower().endswith(".pdf")
 
-    if not is_pdf:
-        raise HTTPException(status_code=400, detail="Only PDF upload is supported for now")
+@router.post("/sources/upload/finalize", response_model=SourceResponse)
+@limiter.limit("20/hour")
+def finalize_upload(
+    request: Request,
+    payload: FinalizeUploadRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Step 3 of 3 — after the client has PUT to R2, register the source.
 
-    file_path = UPLOAD_DIR / f"{source_id}_{safe_name}"
+    Downloads the object from R2, extracts PDF text, creates the Source row.
+    The storage_key is validated to start with uploads/<user_id>/ to prevent
+    cross-user key injection.
+    """
+    project = db.get(Project, payload.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
-    content = await file.read()
-    if len(content) > MAX_PDF_SIZE:
-        raise HTTPException(status_code=400, detail="PDF is too large (max 20 MB)")
-    file_path.write_bytes(content)
+    # Security: verify the key is scoped to this user — prevents one user from
+    # finalizing another user's upload key.
+    expected_prefix = f"uploads/{current_user.user_id}/"
+    if not payload.storage_key.startswith(expected_prefix):
+        raise HTTPException(status_code=403, detail="Access denied")
 
+    # Download bytes from R2
+    pdf_bytes = storage_service.download_to_bytes(payload.storage_key)
+
+    # Size guard (belt-and-suspenders; R2 ContentLength constraint on presign does this too)
+    if len(pdf_bytes) > MAX_PDF_BYTES:
+        storage_service.delete_object(payload.storage_key)
+        raise HTTPException(status_code=400, detail="PDF is too large (max 25 MB)")
+
+    # Extract text via temp file (extract_pdf_text works on file paths)
+    extracted_text = ""
     try:
-        extracted_text = extract_pdf_text(str(file_path))
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(pdf_bytes)
+            tmp_path = tmp.name
+
+        extracted_text = extract_pdf_text(tmp_path)
     except Exception as e:
-        if file_path.exists():
-            file_path.unlink()
-        raise HTTPException(status_code=400, detail=f"PDF extraction failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"PDF text extraction failed: {str(e)}")
+    finally:
+        try:
+            Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
 
     if not extracted_text.strip():
-        if file_path.exists():
-            file_path.unlink()
-        raise HTTPException(status_code=400, detail="PDF extraction failed: extracted text is empty")
+        raise HTTPException(status_code=400, detail="PDF extraction failed: no readable text found")
 
+    if len(extracted_text) < MIN_TEXT_CHARS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"PDF has too little text (found {len(extracted_text)} chars, need at least {MIN_TEXT_CHARS})"
+        )
+
+    # Truncate to MAX_TEXT_CHARS — matches the OpenAI generation limit
+    if len(extracted_text) > MAX_TEXT_CHARS:
+        extracted_text = extracted_text[:MAX_TEXT_CHARS]
+
+    now = utc_now_iso()
     source = Source(
-        id=source_id,
-        project_id=project_id,
-        title=safe_name,
+        id=str(uuid4()),
+        project_id=payload.project_id,
+        title=payload.title,
         type="pdf",
         status="processed",
-        file_name=safe_name,
-        file_path=str(file_path),
+        storage_key=payload.storage_key,
         text=extracted_text,
         created_at=now,
         updated_at=now,
@@ -209,9 +262,10 @@ async def create_upload_source(
     db.add(source)
     db.commit()
     db.refresh(source)
-
     return _source_to_dict(source)
 
+
+# ── List / get / delete ───────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/sources", response_model=SourceListResponse)
 def list_project_sources(
@@ -257,9 +311,13 @@ def delete_source(
     project = db.get(Project, source.project_id)
     require_owner(current_user, project.user_id if project else None)
 
-    file_path = source.file_path
-    if file_path:
-        path = Path(file_path)
+    # Clean up R2 object if present
+    if source.storage_key:
+        storage_service.delete_object(source.storage_key)
+
+    # Clean up legacy local file if present (pre-R2 rows)
+    if source.file_path:
+        path = Path(source.file_path)
         if path.exists():
             path.unlink()
 

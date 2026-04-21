@@ -209,6 +209,7 @@ export function createTextSource(input: CreateTextSourceInput) {
   });
 }
 
+/** @deprecated Old multipart upload — use presignAndUploadPDF instead */
 export function uploadPDFSource(projectId: string, file: File) {
   const form = new FormData();
   form.append("project_id", projectId);
@@ -216,6 +217,70 @@ export function uploadPDFSource(projectId: string, file: File) {
   return apiRequest<Source>("/sources/upload", {
     method: "POST",
     body: form,
+  });
+}
+
+export type PresignResponse = {
+  upload_url: string;
+  key: string;
+  expires_in: number;
+};
+
+/**
+ * Three-step presigned upload:
+ *   1. Get a presigned PUT URL from the API
+ *   2. PUT the file bytes directly to R2
+ *   3. Finalize — server downloads from R2, extracts text, creates Source row
+ *
+ * @param onProgress optional callback with upload progress 0–100
+ */
+export async function presignAndUploadPDF(
+  projectId: string,
+  file: File,
+  title: string,
+  onProgress?: (pct: number) => void,
+): Promise<Source> {
+  // Step 1: get presigned URL
+  const presign = await apiRequest<PresignResponse>("/sources/upload/presign", {
+    method: "POST",
+    body: JSON.stringify({
+      project_id: projectId,
+      filename: file.name,
+      content_type: "application/pdf",
+    }),
+  });
+
+  // Step 2: PUT directly to R2 (bypasses our server)
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", presign.upload_url);
+    xhr.setRequestHeader("Content-Type", "application/pdf");
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`Upload to storage failed (${xhr.status})`));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Upload to storage failed (network error)"));
+    xhr.send(file);
+  });
+
+  // Step 3: finalize — server-side text extraction
+  return apiRequest<Source>("/sources/upload/finalize", {
+    method: "POST",
+    body: JSON.stringify({
+      project_id: projectId,
+      storage_key: presign.key,
+      title,
+    }),
   });
 }
 

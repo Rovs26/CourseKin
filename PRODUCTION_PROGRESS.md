@@ -1,6 +1,6 @@
 # ReviewFlow Production Migration — Progress Tracker
 
-**Last session ended: 2026-04-21, after Phase 4 commit. Next: Phase 5 (Cloudflare R2 uploads).**
+**Last session ended: 2026-04-21, after Phase 5 commit. Next: Phase 6 (input-hash generation cache).**
 
 This file tracks the status of each phase in the production migration.
 After completing each sub-task, update the status marker: [ ] = not started,
@@ -82,20 +82,24 @@ Neon test (step 7b) skipped this session — run manually once Neon dev branch e
   DATABASE_URL=<neon-dev-url> alembic upgrade head
 
 ## Phase 5 — Cloudflare R2 + presigned uploads
-[ ] Add boto3 to requirements.txt
-[ ] Add R2_* env vars to config
-[ ] Create app/services/storage_service.py with presign_put/get/delete
-[ ] Add storage_key column to sources (nullable, migration)
-[ ] New endpoint POST /uploads/presign
-[ ] Rewrite POST /sources/upload as POST /sources/finalize
-[ ] Update frontend upload component to presign → PUT → finalize flow
-[ ] Delete old local UPLOAD_DIR logic
+[x] Add boto3 to requirements.txt
+[x] Add R2_* env vars to config (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_ENDPOINT_URL, R2_PRESIGN_EXPIRY_SECONDS)
+[x] Create app/services/storage_service.py with presign_put/get/download/delete
+[x] Add storage_key column to sources (nullable, migration a9ac25803428)
+[x] New endpoints: POST /sources/upload/presign + POST /sources/upload/finalize
+[x] Remove old multipart POST /sources/upload
+[x] Update frontend upload component to presign → PUT (XHR with progress) → finalize flow
+[x] delete_source also calls storage_service.delete_object for R2-backed sources
 [ ] Test: full upload → generate flow against real R2
 [ ] Commit
 
 Commit SHA:
-Manual follow-ups: in Cloudflare R2 dashboard, set lifecycle rule on
-reviewflow-uploads to delete objects with prefix "temp/" after 7 days.
+Manual follow-ups:
+- In Cloudflare R2 dashboard → reviewflow-uploads bucket → Settings → Lifecycle rules:
+  1. Delete objects with prefix "temp/" after 7 days
+  2. Delete incomplete multipart uploads after 1 day
+- Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT_URL in Railway env vars
+- Live upload test (step 8) must be done once R2 bucket and env vars are configured
 
 ## Phase 6 — Input-hash generation cache
 [ ] Add generation_cache table + model

@@ -33,10 +33,25 @@ class Settings(BaseSettings):
     # Hard character cap on extracted source text sent to OpenAI — ~12.5k tokens
     MAX_EXTRACTED_CHARS: int = 50_000
 
-    # ── Storage ──────────────────────────────────────────────────────────────
-    # Where uploaded PDFs are stored. In Docker this is /app/uploads (mounted volume).
-    # In local dev it falls back to a ./uploads dir relative to the working directory.
+    # ── Local storage (legacy / dev-only) ────────────────────────────────────
+    # Used only when R2 is not configured. In Docker this is /app/uploads.
+    # In local dev it falls back to ./uploads. Superseded by R2 in production.
     UPLOAD_DIR: str = "./uploads"
+
+    # ── Cloudflare R2 ─────────────────────────────────────────────────────────
+    # From Cloudflare dashboard → R2 → Manage R2 API Tokens
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = "reviewflow-uploads"
+    # e.g. https://<account-id>.r2.cloudflarestorage.com
+    R2_ENDPOINT_URL: str = ""
+    # Presigned PUT URL lifetime — 5 minutes is enough to complete any upload
+    R2_PRESIGN_EXPIRY_SECONDS: int = 300
+
+    @property
+    def r2_configured(self) -> bool:
+        return bool(self.R2_ENDPOINT_URL and self.R2_ACCESS_KEY_ID and self.R2_SECRET_ACCESS_KEY)
 
     @property
     def is_postgres(self) -> bool:

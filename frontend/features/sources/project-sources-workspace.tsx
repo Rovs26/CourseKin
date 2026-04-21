@@ -4,7 +4,7 @@ import { useState } from "react";
 import { EmptyState } from "@/components/states/empty-state";
 import { SourceUploadPanel } from "@/components/sources/source-upload-panel";
 import { SourceList } from "@/components/sources/source-list";
-import { createTextSource, uploadPDFSource, createURLSource } from "@/lib/reviewflow-api";
+import { createTextSource, presignAndUploadPDF, createURLSource } from "@/lib/reviewflow-api";
 import { useProject } from "@/hooks/use-project";
 import { useSources } from "@/hooks/use-sources";
 
@@ -20,6 +20,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmittingText, setIsSubmittingText] = useState(false);
   const [isSubmittingPdf, setIsSubmittingPdf] = useState(false);
+  const [pdfUploadPct, setPdfUploadPct] = useState<number | null>(null);
   const [isSubmittingUrl, setIsSubmittingUrl] = useState(false);
 
   const isLoading = isProjectLoading || isSourcesLoading;
@@ -63,9 +64,15 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
 
     setSubmitError(null);
     setIsSubmittingPdf(true);
+    setPdfUploadPct(0);
+
+    // Derive a title from the filename (strip extension)
+    const title = file.name.replace(/\.pdf$/i, "").trim() || file.name;
 
     try {
-      await uploadPDFSource(projectId, file);
+      await presignAndUploadPDF(projectId, file, title, (pct) => {
+        setPdfUploadPct(pct);
+      });
       await refetchSources();
     } catch (err) {
       setSubmitError(
@@ -73,6 +80,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
       );
     } finally {
       setIsSubmittingPdf(false);
+      setPdfUploadPct(null);
     }
   };
 
@@ -128,7 +136,9 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
 
   const isSubmitting = isSubmittingText || isSubmittingPdf || isSubmittingUrl;
   const submittingLabel = isSubmittingPdf
-    ? "Uploading PDF..."
+    ? pdfUploadPct !== null && pdfUploadPct < 100
+      ? `Uploading PDF… ${pdfUploadPct}%`
+      : "Extracting text from PDF…"
     : isSubmittingUrl
     ? "Fetching URL..."
     : "Adding text source...";
