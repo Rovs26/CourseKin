@@ -20,8 +20,8 @@ from app.schemas.reviewer import (
 from app.services.generation_service import (
     run_generation_in_background,
     run_batch_generation_in_background,
-    MAX_SOURCE_CHARS,
 )
+from app.services.usage_service import check_monthly_quota
 from app.services.pdf_export_service import generate_reviewer_pdf
 from app.services.templates import get_template
 
@@ -235,11 +235,8 @@ def regenerate_reviewer(
             detail="Selected source has no usable extracted text yet"
         )
 
-    if len(source_text) > MAX_SOURCE_CHARS:
-        raise HTTPException(
-            status_code=400,
-            detail="Source text is too long for generation. Please use a shorter source or split it."
-        )
+    if project.user_id:
+        check_monthly_quota(user_id=project.user_id, db=db)
 
     now = utc_now_iso()
 
@@ -279,6 +276,7 @@ def regenerate_reviewer(
         project_id=job.project_id,
         source_id=job.source_id,
         source_text=source_text,
+        user_id=project.user_id,
         sections=sections,
         counts=counts,
         merge_mode=payload.merge_mode,
@@ -303,6 +301,9 @@ def batch_generate_reviewer(
 
     if not payload.sources:
         raise HTTPException(status_code=400, detail="At least one source config is required")
+
+    if project.user_id:
+        check_monthly_quota(user_id=project.user_id, db=db)
 
     now = utc_now_iso()
     batch_id = str(uuid4())
@@ -329,11 +330,6 @@ def batch_generate_reviewer(
             raise HTTPException(
                 status_code=400,
                 detail=f"Source '{source.title}' has no usable text"
-            )
-        if len(source_text) > MAX_SOURCE_CHARS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Source '{source.title}' is too long for generation"
             )
 
         job = Job(
@@ -364,6 +360,7 @@ def batch_generate_reviewer(
             "job_id": job.id,
             "source_id": source.id,
             "source_text": source_text,
+            "user_id": project.user_id,
             "sections": sections,
             "counts": counts_dict,
             "merge_mode": sc.merge_mode,

@@ -1,4 +1,4 @@
-from sqlalchemy import String, Text, Integer, JSON
+from sqlalchemy import String, Text, Integer, JSON, Float, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -61,3 +61,17 @@ class Reviewer(Base):
     content_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[str | None] = mapped_column(String, nullable=True)
     updated_at: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class UsageLog(Base):
+    __tablename__ = "usage_log"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    job_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    model: Mapped[str] = mapped_column(String, nullable=False)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    cached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False, index=True)

@@ -9,7 +9,8 @@ from app.core.utils import utc_now_iso
 from app.db.database import get_db
 from app.db.models import Project, Source, Job
 from app.schemas.job import JobGenerateRequest, JobResponse, JobListResponse
-from app.services.generation_service import run_generation_in_background, MAX_SOURCE_CHARS
+from app.services.generation_service import run_generation_in_background
+from app.services.usage_service import check_monthly_quota
 from app.services.templates import get_template
 
 logger = logging.getLogger(__name__)
@@ -74,11 +75,10 @@ def create_generate_job(
             detail="Selected source has no usable extracted text yet"
         )
 
-    if len(source_text) > MAX_SOURCE_CHARS:
-        raise HTTPException(
-            status_code=400,
-            detail="Source text is too long for generation. Please use a shorter source or split it."
-        )
+    # Quota check — must come before the job row is created.
+    # In Phase 2 this will use the authenticated Clerk user_id; for now use project.user_id.
+    if project.user_id:
+        check_monthly_quota(user_id=project.user_id, db=db)
 
     now = utc_now_iso()
     job = Job(
@@ -118,6 +118,7 @@ def create_generate_job(
         project_id=job.project_id,
         source_id=job.source_id,
         source_text=source_text,
+        user_id=project.user_id,
         sections=sections,
         counts=counts,
         merge_mode=payload.merge_mode,

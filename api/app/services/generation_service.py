@@ -11,12 +11,17 @@ from app.db.models import Job, Reviewer
 
 logger = logging.getLogger(__name__)
 
-MAX_SOURCE_CHARS = 400_000  # ~100k tokens, leaves room for prompts within 128k context
+# Pricing per million tokens: (input_usd, output_usd)
+PRICING: dict[str, tuple[float, float]] = {
+    "gpt-4.1-nano": (0.10, 0.40),
+    "gpt-4o-mini":  (0.15, 0.60),
+    "gpt-4.1-mini": (0.40, 1.60),
+}
 
 ALL_SECTIONS = ["summary", "key_points", "definitions", "qa", "quiz", "flashcards"]
 
 DEFAULT_COUNTS = {
-    "key_points": 15,
+    "key_points": 12,
     "definitions": 10,
     "qa": 10,
     "quiz": 8,
@@ -34,7 +39,7 @@ SECTION_SCHEMA = {
 
 SECTION_INSTRUCTIONS = {
     "summary": "Produce a full study summary, not a short abstract. Make it detailed enough to review the topic without rereading the source.",
-    "key_points": "Extract all important testable ideas. Prefer many useful points over a short list.",
+    "key_points": "Extract key testable concepts that are directly and explicitly stated in the source text. Do not include facts, trivia, or information not present in the source. Focus on concepts the student needs to know to pass an exam on this specific material.",
     "definitions": "Include every important term from the source that a student may need to memorize or explain.",
     "qa": "Create substantial study questions and direct model answers. Questions should help with recall, explanation, and understanding.",
     "quiz": "Create multiple choice items that test core understanding. Make the distractors plausible but still grounded in the source.",
@@ -65,9 +70,9 @@ def _build_prompt(sections: list[str], counts: dict[str, int]) -> tuple[str, str
 Your task is to convert the user's source text into a deeply comprehensive reviewer for serious study and exam mastery.
 
 Rules:
-Use the source text only.
-Do not invent facts that are not supported by the source.
-Be thorough and exhaustive.
+Use the source text only. Do not invent or include facts not explicitly stated in the source.
+Do not add trivia, fun facts, or general knowledge that is not in the source material.
+Be thorough and exhaustive within the source material.
 Aim for high study value, not brevity.
 Write clearly and concretely for students.
 Avoid filler.
@@ -82,17 +87,18 @@ Section requirements:
 {exclusion_note}
 
 Quality bar:
-The reviewer should feel exam ready, comprehensive, and useful for intensive study."""
+The reviewer should feel exam ready, comprehensive, and useful for intensive study.
+Every item must be traceable to the source text provided."""
 
     user_prompt = """Convert the text below into a comprehensive exam reviewer.
 
 Requirements:
 Fill every requested section with useful content.
-Use the source text only.
+Use the source text only — do not add information from outside the source.
 Return strict JSON only.
 Do not leave fields empty.
 Be as extensive and study oriented as possible.
-Stay grounded in the text.
+Stay strictly grounded in the provided text.
 
 Source text:
 {source_text}"""
@@ -100,8 +106,26 @@ Source text:
     return system_prompt, user_prompt
 
 
-def _call_openai(source_text: str, sections: list[str], counts: dict[str, int]) -> dict:
+def _compute_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    """Compute USD cost for an OpenAI call based on token counts and model pricing."""
+    input_rate, output_rate = PRICING.get(model, (0.15, 0.60))  # fallback to gpt-4o-mini rates
+    return (prompt_tokens * input_rate + completion_tokens * output_rate) / 1_000_000
+
+
+def _call_openai(
+    source_text: str,
+    sections: list[str],
+    counts: dict[str, int],
+) -> tuple[dict, dict]:
+    """Call OpenAI and return (parsed_content, usage_info).
+
+    usage_info keys: model, prompt_tokens, completion_tokens, cost_usd
+    """
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+    # Hard cap on source text before sending to OpenAI
+    if len(source_text) > settings.MAX_EXTRACTED_CHARS:
+        source_text = source_text[: settings.MAX_EXTRACTED_CHARS]
 
     system_prompt, user_prompt_template = _build_prompt(sections, counts)
 
@@ -121,19 +145,36 @@ def _call_openai(source_text: str, sections: list[str], counts: dict[str, int]) 
         ],
         temperature=0.3,
         response_format={"type": "json_object"},
+        max_tokens=settings.OPENAI_MAX_OUTPUT_TOKENS,
+        timeout=settings.OPENAI_TIMEOUT_SECONDS,
     )
 
     elapsed = time.perf_counter() - start
     usage = response.usage
+
+    prompt_tokens = usage.prompt_tokens if usage else 0
+    completion_tokens = usage.completion_tokens if usage else 0
+    cost_usd = _compute_cost(settings.OPENAI_MODEL, prompt_tokens, completion_tokens)
+
     logger.info(
-        "OpenAI response: %.1fs, tokens_in=%s tokens_out=%s",
+        "OpenAI response: %.1fs tokens_in=%d tokens_out=%d cost_usd=%.6f",
         elapsed,
-        usage.prompt_tokens if usage else "?",
-        usage.completion_tokens if usage else "?",
+        prompt_tokens,
+        completion_tokens,
+        cost_usd,
     )
 
     raw = response.choices[0].message.content or ""
-    return json.loads(raw)
+    content = json.loads(raw)
+
+    usage_info = {
+        "model": settings.OPENAI_MODEL,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "cost_usd": cost_usd,
+    }
+
+    return content, usage_info
 
 
 LIST_SECTIONS = {"key_points", "definitions", "qa", "quiz", "flashcards"}
@@ -187,7 +228,6 @@ def _merge_content(
             elif isinstance(existing_sources, str):
                 if existing_sources != source_id:
                     meta[section] = [existing_sources, source_id]
-                # else: same source, keep as-is but upgrade to list for consistency
                 else:
                     meta[section] = [source_id]
             else:
@@ -227,6 +267,7 @@ def run_generation_in_background(
     project_id: str,
     source_id: str,
     source_text: str,
+    user_id: str | None = None,
     sections: list[str] | None = None,
     counts: dict | None = None,
     merge_mode: str = "skip",
@@ -244,8 +285,9 @@ def run_generation_in_background(
         job.updated_at = utc_now_iso()
         db.commit()
 
+        usage_info: dict | None = None
         try:
-            content_json = _call_openai(source_text, resolved_sections, resolved_counts)
+            content_json, usage_info = _call_openai(source_text, resolved_sections, resolved_counts)
         except Exception as e:
             logger.error("Generation failed: job=%s error=%s", job_id, e)
             job.status = "failed"
@@ -254,6 +296,23 @@ def run_generation_in_background(
             job.updated_at = utc_now_iso()
             db.commit()
             return
+
+        # Record usage after successful OpenAI call
+        if usage_info and user_id:
+            try:
+                from app.services.usage_service import record_usage  # avoid circular import
+                record_usage(
+                    db=db,
+                    user_id=user_id,
+                    job_id=job_id,
+                    model=usage_info["model"],
+                    prompt_tokens=usage_info["prompt_tokens"],
+                    completion_tokens=usage_info["completion_tokens"],
+                    cost_usd=usage_info["cost_usd"],
+                )
+            except Exception as e:
+                # Non-fatal: log but don't fail the job
+                logger.warning("Failed to record usage: job=%s error=%s", job_id, e)
 
         now = utc_now_iso()
 
@@ -317,18 +376,19 @@ def run_batch_generation_in_background(
         "job_id": str,
         "source_id": str,
         "source_text": str,
+        "user_id": str | None,
         "sections": list[str] | None,
         "counts": dict | None,
         "merge_mode": str,
     }
     """
     for config in source_configs:
-        # Each sub-job runs like a normal generation, sharing the same project reviewer
         run_generation_in_background(
             job_id=config["job_id"],
             project_id=project_id,
             source_id=config["source_id"],
             source_text=config["source_text"],
+            user_id=config.get("user_id"),
             sections=config["sections"],
             counts=config["counts"],
             merge_mode=config["merge_mode"],

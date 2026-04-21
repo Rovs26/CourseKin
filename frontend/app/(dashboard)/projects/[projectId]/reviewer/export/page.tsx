@@ -404,6 +404,7 @@ function InlineNote({
         <div
           className="flex h-4 cursor-grab items-center justify-center rounded-t-md border border-b-0 border-amber-300 bg-amber-100/80 active:cursor-grabbing"
           onMouseDown={handleDragStart}
+          data-export-ui
         >
           <div className="flex gap-0.5">
             <span className="h-0.5 w-0.5 rounded-full bg-amber-400" />
