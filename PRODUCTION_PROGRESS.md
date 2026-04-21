@@ -1,5 +1,7 @@
 # ReviewFlow Production Migration — Progress Tracker
 
+**Last session ended: 2026-04-21, after Phase 3 commit c657fe3. Next: Phase 4 (PostgreSQL + Alembic). Pre-req: create Neon project + dev branch before starting.**
+
 This file tracks the status of each phase in the production migration.
 After completing each sub-task, update the status marker: [ ] = not started,
 [~] = in progress, [x] = done.
@@ -58,9 +60,9 @@ Valid-JWT and cross-user-403 tests must be run in staging once Clerk is wired up
 [x] Set /sources/url limits to 20/hour per user
 [x] Set global default 600/hour per user
 [x] Return friendly 429 messages
-[ ] Commit
+[x] Commit
 
-Commit SHA:
+Commit SHA: c657fe3
 
 ## Phase 4 — PostgreSQL migration with Alembic
 [ ] Add psycopg2-binary, alembic to requirements.txt
