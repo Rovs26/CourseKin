@@ -1,0 +1,335 @@
+import json
+import logging
+import time
+
+from openai import OpenAI
+
+from app.core.config import settings
+from app.core.utils import utc_now_iso
+from app.db.database import SessionLocal
+from app.db.models import Job, Reviewer
+
+logger = logging.getLogger(__name__)
+
+MAX_SOURCE_CHARS = 400_000  # ~100k tokens, leaves room for prompts within 128k context
+
+ALL_SECTIONS = ["summary", "key_points", "definitions", "qa", "quiz", "flashcards"]
+
+DEFAULT_COUNTS = {
+    "key_points": 15,
+    "definitions": 10,
+    "qa": 10,
+    "quiz": 8,
+    "flashcards": 15,
+}
+
+SECTION_SCHEMA = {
+    "summary": '"summary": "string"',
+    "key_points": '"key_points": ["string"]',
+    "definitions": '"definitions": [{"term": "string", "definition": "string"}]',
+    "qa": '"qa": [{"question": "string", "answer": "string"}]',
+    "quiz": '"quiz": [{"question": "string", "choices": ["string"], "answer": "string", "rationale": "string"}]',
+    "flashcards": '"flashcards": [{"front": "string", "back": "string"}]',
+}
+
+SECTION_INSTRUCTIONS = {
+    "summary": "Produce a full study summary, not a short abstract. Make it detailed enough to review the topic without rereading the source.",
+    "key_points": "Extract all important testable ideas. Prefer many useful points over a short list.",
+    "definitions": "Include every important term from the source that a student may need to memorize or explain.",
+    "qa": "Create substantial study questions and direct model answers. Questions should help with recall, explanation, and understanding.",
+    "quiz": "Create multiple choice items that test core understanding. Make the distractors plausible but still grounded in the source.",
+    "flashcards": "Create memorization ready flashcards for facts, concepts, and relationships.",
+}
+
+
+def _build_prompt(sections: list[str], counts: dict[str, int]) -> tuple[str, str]:
+    """Build system and user prompts for the given sections and counts."""
+
+    schema_parts = [SECTION_SCHEMA[s] for s in sections]
+    schema_str = "{\n  " + ",\n  ".join(schema_parts) + "\n}"
+
+    section_instructions = []
+    for s in sections:
+        instruction = SECTION_INSTRUCTIONS[s]
+        if s in counts and s != "summary":
+            instruction += f"\nGenerate exactly {counts[s]} items."
+        section_instructions.append(f"- {s}: {instruction}")
+
+    excluded = [s for s in ALL_SECTIONS if s not in sections]
+    exclusion_note = ""
+    if excluded:
+        exclusion_note = f"\nDo NOT generate these sections: {', '.join(excluded)}. Only return the sections listed above."
+
+    system_prompt = f"""You are an expert academic reviewer builder for exam preparation.
+
+Your task is to convert the user's source text into a deeply comprehensive reviewer for serious study and exam mastery.
+
+Rules:
+Use the source text only.
+Do not invent facts that are not supported by the source.
+Be thorough and exhaustive.
+Aim for high study value, not brevity.
+Write clearly and concretely for students.
+Avoid filler.
+Return strict JSON only.
+Do not wrap the JSON in markdown.
+
+Output schema (return ONLY these fields):
+{schema_str}
+
+Section requirements:
+{chr(10).join(section_instructions)}
+{exclusion_note}
+
+Quality bar:
+The reviewer should feel exam ready, comprehensive, and useful for intensive study."""
+
+    user_prompt = """Convert the text below into a comprehensive exam reviewer.
+
+Requirements:
+Fill every requested section with useful content.
+Use the source text only.
+Return strict JSON only.
+Do not leave fields empty.
+Be as extensive and study oriented as possible.
+Stay grounded in the text.
+
+Source text:
+{source_text}"""
+
+    return system_prompt, user_prompt
+
+
+def _call_openai(source_text: str, sections: list[str], counts: dict[str, int]) -> dict:
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+    system_prompt, user_prompt_template = _build_prompt(sections, counts)
+
+    logger.info(
+        "OpenAI call: model=%s sections=%s source_chars=%d",
+        settings.OPENAI_MODEL,
+        sections,
+        len(source_text),
+    )
+    start = time.perf_counter()
+
+    response = client.chat.completions.create(
+        model=settings.OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt_template.format(source_text=source_text)},
+        ],
+        temperature=0.3,
+        response_format={"type": "json_object"},
+    )
+
+    elapsed = time.perf_counter() - start
+    usage = response.usage
+    logger.info(
+        "OpenAI response: %.1fs, tokens_in=%s tokens_out=%s",
+        elapsed,
+        usage.prompt_tokens if usage else "?",
+        usage.completion_tokens if usage else "?",
+    )
+
+    raw = response.choices[0].message.content or ""
+    return json.loads(raw)
+
+
+LIST_SECTIONS = {"key_points", "definitions", "qa", "quiz", "flashcards"}
+
+
+def _merge_content(
+    existing: dict | None,
+    new_content: dict,
+    sections: list[str],
+    source_id: str,
+    merge_mode: str = "skip",
+) -> dict:
+    """Merge new partial content into existing content.
+
+    merge_mode controls how existing sections are handled:
+      "skip"    — Additive. Only fills sections that don't already have content.
+      "replace" — Overwrites requested sections with new content.
+      "append"  — For list sections (key_points, definitions, qa, quiz, flashcards),
+                  concatenates new items after existing items.
+                  For summary (non-list), replaces with the new one.
+
+    Always updates _meta.sources to track which source(s) own each section.
+    For append mode, sources is a list of contributing source IDs per section.
+    """
+    if existing is None:
+        existing = {}
+
+    merged = dict(existing)
+    meta = dict(merged.get("_meta", {}).get("sources", {}))
+
+    for section in sections:
+        if section not in new_content:
+            continue
+
+        has_existing = section in merged and merged[section]
+
+        if merge_mode == "skip" and has_existing:
+            continue
+
+        if merge_mode == "append" and has_existing and section in LIST_SECTIONS:
+            # Concatenate list items
+            old_items = merged[section] if isinstance(merged[section], list) else []
+            new_items = new_content[section] if isinstance(new_content[section], list) else []
+            merged[section] = old_items + new_items
+
+            # Track multiple sources per section
+            existing_sources = meta.get(section)
+            if isinstance(existing_sources, list):
+                if source_id not in existing_sources:
+                    meta[section] = existing_sources + [source_id]
+            elif isinstance(existing_sources, str):
+                if existing_sources != source_id:
+                    meta[section] = [existing_sources, source_id]
+                # else: same source, keep as-is but upgrade to list for consistency
+                else:
+                    meta[section] = [source_id]
+            else:
+                meta[section] = [source_id]
+        else:
+            # Replace or first-fill
+            merged[section] = new_content[section]
+            meta[section] = [source_id]
+
+    merged["_meta"] = {"sources": meta}
+    return merged
+
+
+def _resolve_sections_and_counts(
+    sections: list[str] | None,
+    counts_input: dict | None,
+) -> tuple[list[str], dict[str, int]]:
+    """Normalize sections list and counts dict."""
+    if sections is None:
+        sections = list(ALL_SECTIONS)
+    else:
+        sections = [s for s in sections if s in ALL_SECTIONS]
+        if not sections:
+            sections = list(ALL_SECTIONS)
+
+    counts = dict(DEFAULT_COUNTS)
+    if counts_input:
+        for key, value in counts_input.items():
+            if value is not None and key in DEFAULT_COUNTS:
+                counts[key] = value
+
+    return sections, counts
+
+
+def run_generation_in_background(
+    job_id: str,
+    project_id: str,
+    source_id: str,
+    source_text: str,
+    sections: list[str] | None = None,
+    counts: dict | None = None,
+    merge_mode: str = "skip",
+):
+    resolved_sections, resolved_counts = _resolve_sections_and_counts(sections, counts)
+
+    db = SessionLocal()
+    try:
+        job = db.get(Job, job_id)
+        if not job:
+            return
+
+        # Mark job as actively generating
+        job.stage = "generating"
+        job.updated_at = utc_now_iso()
+        db.commit()
+
+        try:
+            content_json = _call_openai(source_text, resolved_sections, resolved_counts)
+        except Exception as e:
+            logger.error("Generation failed: job=%s error=%s", job_id, e)
+            job.status = "failed"
+            job.stage = "failed"
+            job.error_message = str(e)
+            job.updated_at = utc_now_iso()
+            db.commit()
+            return
+
+        now = utc_now_iso()
+
+        reviewer = db.get(Reviewer, project_id)
+        if reviewer:
+            existing_content = reviewer.content_json if isinstance(reviewer.content_json, dict) else {}
+            merged = _merge_content(existing_content, content_json, resolved_sections, source_id, merge_mode)
+            reviewer.source_id = source_id
+            reviewer.status = "ready"
+            reviewer.output_type = "full-reviewer"
+            reviewer.content_json = merged
+            reviewer.updated_at = now
+        else:
+            # Track which source generated each section (always list format)
+            meta = {s: [source_id] for s in resolved_sections if s in content_json}
+            content_json["_meta"] = {"sources": meta}
+
+            reviewer = Reviewer(
+                project_id=project_id,
+                source_id=source_id,
+                status="ready",
+                output_type="full-reviewer",
+                version=1,
+                content_json=content_json,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(reviewer)
+
+        job.status = "completed"
+        job.stage = "completed"
+        job.error_message = None
+        job.updated_at = now
+        db.commit()
+
+        logger.info("Generation completed: job=%s project=%s", job_id, project_id)
+
+    except Exception as e:
+        try:
+            job = db.get(Job, job_id)
+            if job:
+                job.status = "failed"
+                job.stage = "failed"
+                job.error_message = f"Unexpected error: {str(e)}"
+                job.updated_at = utc_now_iso()
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+def run_batch_generation_in_background(
+    batch_id: str,
+    project_id: str,
+    source_configs: list[dict],
+):
+    """Run multiple source generations sequentially, each appending to the reviewer.
+
+    source_configs: list of {
+        "job_id": str,
+        "source_id": str,
+        "source_text": str,
+        "sections": list[str] | None,
+        "counts": dict | None,
+        "merge_mode": str,
+    }
+    """
+    for config in source_configs:
+        # Each sub-job runs like a normal generation, sharing the same project reviewer
+        run_generation_in_background(
+            job_id=config["job_id"],
+            project_id=project_id,
+            source_id=config["source_id"],
+            source_text=config["source_text"],
+            sections=config["sections"],
+            counts=config["counts"],
+            merge_mode=config["merge_mode"],
+        )

@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --rf-bg: #f8fafc;
+  --rf-shell-bg: #f1f5f9;
+  --rf-card: #ffffff;
+  --rf-soft: #f8fafc;
+  --rf-soft-2: #e2e8f0;
+  --rf-text: #0f172a;
+  --rf-text-muted: #64748b;
+  --rf-border: #e2e8f0;
+}
+
+html.dark {
+  color-scheme: dark;
+  --rf-bg: #020617;
+  --rf-shell-bg: #020617;
+  --rf-card: #0f172a;
+  --rf-soft: #111827;
+  --rf-soft-2: #1e293b;
+  --rf-text: #f8fafc;
+  --rf-text-muted: #94a3b8;
+  --rf-border: #334155;
+}
+
+@layer base {
+  * {
+    border-color: var(--rf-border);
+  }
+
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    min-height: 100vh;
+    background: var(--rf-bg);
+    color: var(--rf-text);
+  }
+}
+
+html.dark .bg-white {
+  background-color: var(--rf-card) !important;
+}
+
+html.dark .bg-white\/90 {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+}
+
+html.dark .bg-slate-50 {
+  background-color: var(--rf-soft) !important;
+}
+
+html.dark .bg-slate-100 {
+  background-color: var(--rf-soft-2) !important;
+}
+
+html.dark .text-slate-950,
+html.dark .text-slate-900 {
+  color: var(--rf-text) !important;
+}
+
+html.dark .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-slate-600 {
+  color: #94a3b8 !important;
+}
+
+html.dark .text-slate-500 {
+  color: var(--rf-text-muted) !important;
+}
+
+html.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+html.dark .bg-slate-200 {
+  background-color: var(--rf-soft-2) !important;
+}
+
+html.dark .border,
+html.dark .border-slate-200 {
+  border-color: var(--rf-border) !important;
+}
+
+html.dark .bg-slate-100 {
+  background-color: rgba(100, 116, 139, 0.18) !important;
+}
+
+html.dark .ring-slate-200\/70 {
+  --tw-ring-color: rgba(51, 65, 85, 0.7) !important;
+}

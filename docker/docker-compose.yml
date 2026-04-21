@@ -1,0 +1,23 @@
+services:
+
+  api:
+    build: ../api
+    container_name: reviewflow_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../api:/app
+      - reviewflow_db:/app/data
+      - reviewflow_uploads:/app/uploads
+    env_file:
+      - ../api/.env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  reviewflow_db:
+  reviewflow_uploads:
