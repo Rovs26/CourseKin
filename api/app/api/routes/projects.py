@@ -4,6 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 
+from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
@@ -36,9 +37,13 @@ def _project_to_dict(project: Project):
 
 @router.post("", response_model=ProjectResponse)
 @limiter.limit("20/minute")
-def create_project(request: Request, payload: ProjectCreate, db: Session = Depends(get_db)):
+def create_project(
+    request: Request,
+    payload: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     now = utc_now_iso()
-    user_id = payload.user_id
     project = Project(
         id=str(uuid4()),
         title=payload.title,
@@ -48,7 +53,7 @@ def create_project(request: Request, payload: ProjectCreate, db: Session = Depen
         field_of_study=payload.field_of_study,
         source_mode=payload.source_mode,
         template_id=payload.template_id,
-        user_id=user_id,
+        user_id=current_user.user_id,  # always from verified JWT, never from body
         created_at=now,
         updated_at=now,
     )
@@ -59,25 +64,44 @@ def create_project(request: Request, payload: ProjectCreate, db: Session = Depen
 
 
 @router.get("", response_model=ProjectListResponse)
-def list_projects(db: Session = Depends(get_db)):
-    items = db.query(Project).all()
+def list_projects(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    items = (
+        db.query(Project)
+        .filter(Project.user_id == current_user.user_id)
+        .all()
+    )
     return {"items": [_project_to_dict(item) for item in items], "total": len(items)}
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-def get_project(project_id: str, db: Session = Depends(get_db)):
+def get_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
     return _project_to_dict(project)
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
 @limiter.limit("30/minute")
-def update_project(request: Request, project_id: str, payload: ProjectUpdate, db: Session = Depends(get_db)):
+def update_project(
+    request: Request,
+    project_id: str,
+    payload: ProjectUpdate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     updates = payload.model_dump(exclude_unset=True)
     for key, value in updates.items():
@@ -91,10 +115,16 @@ def update_project(request: Request, project_id: str, payload: ProjectUpdate, db
 
 @router.delete("/{project_id}")
 @limiter.limit("10/minute")
-def delete_project(request: Request, project_id: str, db: Session = Depends(get_db)):
+def delete_project(
+    request: Request,
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     # Delete uploaded files for sources
     sources = db.query(Source).filter(Source.project_id == project_id).all()

@@ -14,9 +14,9 @@ verifying a DNS record).
 [x] Create api/.env.example
 [x] Create frontend/.env.local.example
 [x] Verify .env files are in .gitignore
-[ ] Commit
+[x] Commit
 
-Commit SHA:
+Commit SHA: 261479d
 Manual follow-ups: none.
 
 ## Phase 1 — OpenAI cost controls
@@ -28,26 +28,28 @@ Manual follow-ups: none.
 [x] Instrument generation_service to call both
 [x] Add FREE_TIER_MONTHLY_USD config
 [x] Test: verify quota blocks 11th generation when limit is low
-[ ] Commit
+[x] Commit
 
-Commit SHA:
+Commit SHA: d5468f1
 Manual follow-ups: on OpenAI dashboard, verify auto-recharge is OFF and
 monthly budget alert is set to $10 with thresholds at $3/$6/$9.
 
 ## Phase 2 — Clerk JWT backend verification
-[ ] Add fastapi-clerk-auth to requirements.txt
-[ ] Add CLERK_JWKS_URL and CLERK_SECRET_KEY to config
-[ ] Create app/core/auth.py with get_current_user dependency
-[ ] Apply dependency to all mutation and data-access routes
-[ ] Enforce user_id ownership checks on project/source/job fetches
-[ ] Remove X-User-Id from CORS allow_headers
-[ ] Update frontend API client to send Clerk JWT as Authorization: Bearer
-[ ] Test: verify unauthenticated calls return 401
+[x] Add fastapi-clerk-auth to requirements.txt
+[x] Add CLERK_JWKS_URL, CLERK_SECRET_KEY, CLERK_ISSUER to config
+[x] Create app/core/auth.py with get_current_user dependency
+[x] Apply dependency to all mutation and data-access routes
+[x] Enforce user_id ownership checks on project/source/job fetches
+[x] Remove X-User-Id from CORS allow_headers
+[x] Update frontend API client to send Clerk JWT as Authorization: Bearer
+[x] Test: verify unauthenticated calls return 401
 [ ] Commit
 
 Commit SHA:
 Manual follow-ups: in Clerk dashboard, under JWT Templates, ensure the default
 template includes the user ID claim. Get the JWKS URL from Clerk → API Keys.
+Set CLERK_JWKS_URL, CLERK_SECRET_KEY, CLERK_ISSUER in Railway/Render env vars.
+Valid-JWT and cross-user-403 tests must be run in staging once Clerk is wired up.
 
 ## Phase 3 — Per-user rate limiting
 [ ] Create key_func that returns user_id for authed, IP for anon

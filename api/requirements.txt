@@ -10,3 +10,5 @@ sqlalchemy
 pypdf
 reportlab
 slowapi
+fastapi-clerk-auth>=0.0.9
+python-jose[cryptography]>=3.3.0

@@ -8,6 +8,16 @@ const API_BASE_URL = (
   "http://localhost:8000"
 ).replace(/\/+$/, "");
 
+// ── Auth token injection ───────────────────────────────────────────────────────
+// Call setTokenGetter() once with useAuth().getToken from Clerk.
+// apiRequest will call it before every request and attach the Bearer token.
+// This avoids threading a token parameter through every API call site.
+let _getToken: (() => Promise<string | null>) | null = null;
+
+export function setTokenGetter(fn: () => Promise<string | null>): void {
+  _getToken = fn;
+}
+
 export type JobStatus = "queued" | "processing" | "completed" | "failed";
 
 export type JobStage =
@@ -113,6 +123,16 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (init?.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
+  }
+
+  // Attach Clerk JWT if a token getter is configured
+  if (_getToken) {
+    try {
+      const token = await _getToken();
+      if (token) headers.set("Authorization", `Bearer ${token}`);
+    } catch {
+      // Non-fatal: let the request proceed; the server will return 401 if auth is required
+    }
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -279,11 +299,20 @@ export async function downloadCustomPdf(
   sectionOrder: string[],
   visibleSections: string[]
 ): Promise<Blob> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (_getToken) {
+    try {
+      const token = await _getToken();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+    } catch {}
+  }
+
   const response = await fetch(
     `${API_BASE_URL}/projects/${projectId}/reviewer/export/custom-pdf`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         section_order: sectionOrder,
         visible_sections: visibleSections,

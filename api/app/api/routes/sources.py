@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Request
 from sqlalchemy.orm import Session
 
+from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
@@ -17,6 +18,7 @@ from app.schemas.source import (
     SourceResponse,
     SourceListResponse,
 )
+from app.core.config import settings
 from app.core.security import validate_url_safe
 from app.services.pdf_service import extract_pdf_text
 
@@ -24,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Sources"])
 
-UPLOAD_DIR = Path("/app/uploads")
+UPLOAD_DIR = Path(settings.UPLOAD_DIR)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_PDF_SIZE = 20 * 1024 * 1024  # 20 MB
@@ -45,10 +47,15 @@ def _source_to_dict(source: Source):
 
 
 @router.post("/sources/text", response_model=SourceResponse)
-def create_text_source(payload: SourceTextCreate, db: Session = Depends(get_db)):
+def create_text_source(
+    payload: SourceTextCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     project = db.get(Project, payload.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     text_content = payload.text or ""
     if len(text_content.encode("utf-8")) > MAX_TEXT_SIZE:
@@ -73,10 +80,16 @@ def create_text_source(payload: SourceTextCreate, db: Session = Depends(get_db))
 
 @router.post("/sources/url", response_model=SourceResponse)
 @limiter.limit("10/minute")
-def create_url_source(request: Request, payload: SourceUrlCreate, db: Session = Depends(get_db)):
+def create_url_source(
+    request: Request,
+    payload: SourceUrlCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     project = db.get(Project, payload.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     url_str = str(payload.url)
 
@@ -144,10 +157,12 @@ async def create_upload_source(
     project_id: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     source_id = str(uuid4())
     now = utc_now_iso()
@@ -197,28 +212,48 @@ async def create_upload_source(
 
 
 @router.get("/projects/{project_id}/sources", response_model=SourceListResponse)
-def list_project_sources(project_id: str, db: Session = Depends(get_db)):
+def list_project_sources(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     items = db.query(Source).filter(Source.project_id == project_id).all()
     return {"items": [_source_to_dict(item) for item in items], "total": len(items)}
 
 
 @router.get("/sources/item/{source_id}", response_model=SourceResponse)
-def get_source(source_id: str, db: Session = Depends(get_db)):
+def get_source(
+    source_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     source = db.get(Source, source_id)
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
+
+    project = db.get(Project, source.project_id)
+    require_owner(current_user, project.user_id if project else None)
+
     return _source_to_dict(source)
 
 
 @router.delete("/sources/{source_id}")
-def delete_source(source_id: str, db: Session = Depends(get_db)):
+def delete_source(
+    source_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     source = db.get(Source, source_id)
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
+
+    project = db.get(Project, source.project_id)
+    require_owner(current_user, project.user_id if project else None)
 
     file_path = source.file_path
     if file_path:

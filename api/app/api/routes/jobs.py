@@ -4,6 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 
+from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
@@ -61,10 +62,12 @@ def create_generate_job(
     payload: JobGenerateRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     project = db.get(Project, payload.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     source = _pick_source_for_project(db, payload.project_id, payload.source_id)
 
@@ -75,10 +78,8 @@ def create_generate_job(
             detail="Selected source has no usable extracted text yet"
         )
 
-    # Quota check — must come before the job row is created.
-    # In Phase 2 this will use the authenticated Clerk user_id; for now use project.user_id.
-    if project.user_id:
-        check_monthly_quota(user_id=project.user_id, db=db)
+    # Quota check uses the authenticated user_id from the JWT
+    check_monthly_quota(user_id=current_user.user_id, db=db)
 
     now = utc_now_iso()
     job = Job(
@@ -118,7 +119,7 @@ def create_generate_job(
         project_id=job.project_id,
         source_id=job.source_id,
         source_text=source_text,
-        user_id=project.user_id,
+        user_id=current_user.user_id,
         sections=sections,
         counts=counts,
         merge_mode=payload.merge_mode,
@@ -128,18 +129,31 @@ def create_generate_job(
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
-def get_job(job_id: str, db: Session = Depends(get_db)):
+def get_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     job = db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    project = db.get(Project, job.project_id)
+    require_owner(current_user, project.user_id if project else None)
+
     return _job_to_dict(job)
 
 
 @router.get("/projects/{project_id}/jobs", response_model=JobListResponse)
-def list_project_jobs(project_id: str, db: Session = Depends(get_db)):
+def list_project_jobs(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     items = db.query(Job).filter(Job.project_id == project_id).all()
     return {"items": [_job_to_dict(item) for item in items], "total": len(items)}

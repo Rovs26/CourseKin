@@ -10,7 +10,7 @@ class ProjectCreate(BaseModel):
     field_of_study: str
     source_mode: str
     template_id: Optional[str] = None
-    user_id: Optional[str] = None
+    # user_id is set server-side from the Clerk JWT — not accepted from the request body
 
     @field_validator("title")
     @classmethod

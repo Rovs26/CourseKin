@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
@@ -86,9 +87,17 @@ def _pick_source_for_regenerate(db: Session, project_id: str, source_id: str | N
 
 
 @router.get("/projects/{project_id}/reviewer", response_model=ReviewerResponse)
-def get_project_reviewer(project_id: str, db: Session = Depends(get_db)):
-    reviewer = db.get(Reviewer, project_id)
+def get_project_reviewer(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
+    reviewer = db.get(Reviewer, project_id)
     if not reviewer:
         return {
             "project_id": project_id,
@@ -105,10 +114,15 @@ def get_project_reviewer(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/projects/{project_id}/reviewer/export/pdf")
-def export_reviewer_pdf(project_id: str, db: Session = Depends(get_db)):
+def export_reviewer_pdf(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     reviewer = db.get(Reviewer, project_id)
     if not reviewer or not reviewer.content_json:
@@ -139,11 +153,16 @@ def export_reviewer_pdf(project_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/projects/{project_id}/reviewer/download/pdf")
-def download_reviewer_pdf(project_id: str, db: Session = Depends(get_db)):
+def download_reviewer_pdf(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """Same as export/pdf but forces browser download via attachment disposition."""
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     reviewer = db.get(Reviewer, project_id)
     if not reviewer or not reviewer.content_json:
@@ -178,11 +197,13 @@ def export_custom_pdf(
     project_id: str,
     payload: CustomPdfRequest,
     db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     """Generate PDF with custom section order and visibility from the export editor."""
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     reviewer = db.get(Reviewer, project_id)
     if not reviewer or not reviewer.content_json:
@@ -221,10 +242,12 @@ def regenerate_reviewer(
     payload: ReviewerRegenerateRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     project = db.get(Project, payload.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     source = _pick_source_for_regenerate(db, payload.project_id, payload.source_id)
 
@@ -235,8 +258,7 @@ def regenerate_reviewer(
             detail="Selected source has no usable extracted text yet"
         )
 
-    if project.user_id:
-        check_monthly_quota(user_id=project.user_id, db=db)
+    check_monthly_quota(user_id=current_user.user_id, db=db)
 
     now = utc_now_iso()
 
@@ -276,7 +298,7 @@ def regenerate_reviewer(
         project_id=job.project_id,
         source_id=job.source_id,
         source_text=source_text,
-        user_id=project.user_id,
+        user_id=current_user.user_id,
         sections=sections,
         counts=counts,
         merge_mode=payload.merge_mode,
@@ -292,18 +314,19 @@ def batch_generate_reviewer(
     payload: BatchGenerateRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     """Generate from multiple sources in one request. Each source runs sequentially
     and appends its content to the shared project reviewer."""
     project = db.get(Project, payload.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
 
     if not payload.sources:
         raise HTTPException(status_code=400, detail="At least one source config is required")
 
-    if project.user_id:
-        check_monthly_quota(user_id=project.user_id, db=db)
+    check_monthly_quota(user_id=current_user.user_id, db=db)
 
     now = utc_now_iso()
     batch_id = str(uuid4())
@@ -360,7 +383,7 @@ def batch_generate_reviewer(
             "job_id": job.id,
             "source_id": source.id,
             "source_text": source_text,
-            "user_id": project.user_id,
+            "user_id": current_user.user_id,
             "sections": sections,
             "counts": counts_dict,
             "merge_mode": sc.merge_mode,

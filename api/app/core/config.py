@@ -16,6 +16,15 @@ class Settings(BaseSettings):
     # HTTP timeout for the OpenAI call in seconds — prevents hung background tasks
     OPENAI_TIMEOUT_SECONDS: int = 60
 
+    # ── Clerk auth ────────────────────────────────────────────────────────────
+    # JWKS URL from Clerk dashboard → API Keys → Advanced → JWKS URL
+    CLERK_JWKS_URL: str = ""
+    # Secret key from Clerk dashboard → API Keys (used for server-side SDK calls)
+    CLERK_SECRET_KEY: str = ""
+    # JWT issuer — Clerk instance URL, e.g. "https://clerk.reviewflow.app"
+    # Leave empty in development if not enforcing issuer
+    CLERK_ISSUER: str = ""
+
     # ── Cost controls / quotas ────────────────────────────────────────────────
     # Max USD spend per user per calendar month on the free tier
     FREE_TIER_MONTHLY_USD: float = 0.25
@@ -23,6 +32,11 @@ class Settings(BaseSettings):
     PAID_TIER_MONTHLY_USD: float = 5.00
     # Hard character cap on extracted source text sent to OpenAI — ~12.5k tokens
     MAX_EXTRACTED_CHARS: int = 50_000
+
+    # ── Storage ──────────────────────────────────────────────────────────────
+    # Where uploaded PDFs are stored. In Docker this is /app/uploads (mounted volume).
+    # In local dev it falls back to a ./uploads dir relative to the working directory.
+    UPLOAD_DIR: str = "./uploads"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
