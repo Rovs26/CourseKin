@@ -142,6 +142,11 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
+    // Friendly message for rate limiting — shown directly in the UI
+    if (response.status === 429) {
+      throw new Error("You're going a bit fast. Please wait a moment and try again.");
+    }
+
     let message = `Request failed with status ${response.status}`;
 
     try {

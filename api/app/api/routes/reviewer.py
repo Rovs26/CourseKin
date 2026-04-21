@@ -236,7 +236,7 @@ def export_custom_pdf(
 
 
 @router.post("/reviewer/regenerate", response_model=JobResponse)
-@limiter.limit("10/minute")
+@limiter.limit("10/hour;30/day;100/month")
 def regenerate_reviewer(
     request: Request,
     payload: ReviewerRegenerateRequest,
@@ -308,7 +308,7 @@ def regenerate_reviewer(
 
 
 @router.post("/reviewer/batch-generate", response_model=BatchGenerateResponse)
-@limiter.limit("5/minute")
+@limiter.limit("10/hour;30/day;100/month")
 def batch_generate_reviewer(
     request: Request,
     payload: BatchGenerateRequest,

@@ -47,7 +47,9 @@ def _source_to_dict(source: Source):
 
 
 @router.post("/sources/text", response_model=SourceResponse)
+@limiter.limit("30/hour")
 def create_text_source(
+    request: Request,
     payload: SourceTextCreate,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -79,7 +81,7 @@ def create_text_source(
 
 
 @router.post("/sources/url", response_model=SourceResponse)
-@limiter.limit("10/minute")
+@limiter.limit("20/hour")
 def create_url_source(
     request: Request,
     payload: SourceUrlCreate,
@@ -151,7 +153,7 @@ def create_url_source(
 
 
 @router.post("/sources/upload", response_model=SourceResponse)
-@limiter.limit("5/minute")
+@limiter.limit("20/hour")
 async def create_upload_source(
     request: Request,
     project_id: str = Form(...),

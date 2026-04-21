@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import inspect, text
 
@@ -24,7 +24,21 @@ app = FastAPI(title=settings.APP_NAME)
 
 # Rate limiter
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def friendly_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "rate_limit_exceeded",
+            "detail": "You're going a bit fast. Please wait a moment and try again.",
+            "retry_after_seconds": 60,
+        },
+        headers={"Retry-After": "60"},
+    )
+
+
+app.add_exception_handler(RateLimitExceeded, friendly_rate_limit_handler)
 
 # ── DB bootstrap ─────────────────────────────────────────────────────
 Path("./data").mkdir(parents=True, exist_ok=True)

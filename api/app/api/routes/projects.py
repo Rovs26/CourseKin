@@ -36,7 +36,7 @@ def _project_to_dict(project: Project):
 
 
 @router.post("", response_model=ProjectResponse)
-@limiter.limit("20/minute")
+@limiter.limit("60/hour")
 def create_project(
     request: Request,
     payload: ProjectCreate,

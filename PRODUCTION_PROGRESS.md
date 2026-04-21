@@ -43,21 +43,21 @@ monthly budget alert is set to $10 with thresholds at $3/$6/$9.
 [x] Remove X-User-Id from CORS allow_headers
 [x] Update frontend API client to send Clerk JWT as Authorization: Bearer
 [x] Test: verify unauthenticated calls return 401
-[ ] Commit
+[x] Commit
 
-Commit SHA:
+Commit SHA: ce0ef43
 Manual follow-ups: in Clerk dashboard, under JWT Templates, ensure the default
 template includes the user ID claim. Get the JWKS URL from Clerk → API Keys.
 Set CLERK_JWKS_URL, CLERK_SECRET_KEY, CLERK_ISSUER in Railway/Render env vars.
 Valid-JWT and cross-user-403 tests must be run in staging once Clerk is wired up.
 
 ## Phase 3 — Per-user rate limiting
-[ ] Create key_func that returns user_id for authed, IP for anon
-[ ] Set /jobs/generate limits to 10/hour, 30/day, 100/month per user
-[ ] Set /sources/upload limits to 20/hour per user
-[ ] Set /sources/url limits to 20/hour per user
-[ ] Set global default 600/hour per user
-[ ] Return friendly 429 messages
+[x] Create key_func that returns user_id for authed, IP for anon
+[x] Set /jobs/generate limits to 10/hour, 30/day, 100/month per user
+[x] Set /sources/upload limits to 20/hour per user
+[x] Set /sources/url limits to 20/hour per user
+[x] Set global default 600/hour per user
+[x] Return friendly 429 messages
 [ ] Commit
 
 Commit SHA:

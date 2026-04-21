@@ -56,7 +56,7 @@ def _pick_source_for_project(db: Session, project_id: str, source_id: str | None
 
 
 @router.post("/jobs/generate", response_model=JobResponse)
-@limiter.limit("10/minute")
+@limiter.limit("10/hour;30/day;100/month")
 def create_generate_job(
     request: Request,
     payload: JobGenerateRequest,
