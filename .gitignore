@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+.env
+
+# Node
+node_modules/
+.next/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Environment
+.env.local
+*.env.local
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+api/data/
+
+# Uploads
+api/uploads/
+
+# n8n (legacy)
+n8n/
+
+# Clerk
+.clerk/
+frontend/.clerk/
