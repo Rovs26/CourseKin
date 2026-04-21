@@ -1,6 +1,6 @@
 # ReviewFlow Production Migration — Progress Tracker
 
-**Last session ended: 2026-04-21, after Phase 3 commit c657fe3. Next: Phase 4 (PostgreSQL + Alembic). Pre-req: create Neon project + dev branch before starting.**
+**Last session ended: 2026-04-21, after Phase 4 commit. Next: Phase 5 (Cloudflare R2 uploads).**
 
 This file tracks the status of each phase in the production migration.
 After completing each sub-task, update the status marker: [ ] = not started,
@@ -65,19 +65,21 @@ Valid-JWT and cross-user-403 tests must be run in staging once Clerk is wired up
 Commit SHA: c657fe3
 
 ## Phase 4 — PostgreSQL migration with Alembic
-[ ] Add psycopg2-binary, alembic to requirements.txt
-[ ] Initialize alembic/ directory
-[ ] Generate initial migration from current models
-[ ] Remove ALTER TABLE hacks from main.py
-[ ] Update DATABASE_URL handling (sqlite dev, postgres prod)
-[ ] Add pool_pre_ping=True for Neon serverless
-[ ] Document migration workflow in DEPLOYMENT.md
-[ ] Test: migrate local SQLite, then test against Neon dev branch
+[x] Add psycopg2-binary, alembic to requirements.txt
+[x] Initialize alembic/ directory
+[x] Generate initial migration from current models
+[x] Remove ALTER TABLE hacks from main.py
+[x] Update DATABASE_URL handling (sqlite dev, postgres prod)
+[x] Add pool_pre_ping=True for Neon serverless
+[x] Document migration workflow in DEPLOYMENT.md
+[x] Test: migrate local SQLite (all 5 tables, API boots, health 200)
 [ ] Commit
 
 Commit SHA:
 Manual follow-ups: run `alembic upgrade head` against Neon production DB
 when deploying. Create a Neon branch for staging.
+Neon test (step 7b) skipped this session — run manually once Neon dev branch exists:
+  DATABASE_URL=<neon-dev-url> alembic upgrade head
 
 ## Phase 5 — Cloudflare R2 + presigned uploads
 [ ] Add boto3 to requirements.txt

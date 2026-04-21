@@ -13,7 +13,36 @@
 (to be filled in Phase 10)
 
 ## Database migrations
-(to be filled in Phase 4)
+
+We use Alembic for all schema changes. SQLite is used locally; Neon Postgres is used in production.
+
+### To create a new migration
+1. Edit models in `api/app/db/models.py`
+2. `cd api && alembic revision --autogenerate -m "description of change"`
+3. Review the generated file in `api/alembic/versions/` — autogenerate is not perfect, always read it
+4. Test locally: `alembic upgrade head`
+5. Commit the migration file alongside the model change
+
+### To deploy a migration to production
+Migrations run automatically on Railway via the start command:
+```
+alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+### To roll back
+```
+alembic downgrade -1
+```
+
+### Neon branches for staging
+- **Production DB**: Neon `main` branch
+- **Staging DB**: Neon `dev` branch (kept in sync with `main` schema)
+
+Preview deploys use the `dev` branch. To test a destructive migration safely:
+1. Create a new Neon branch from `main`
+2. Point `DATABASE_URL` at the new branch
+3. Run `alembic upgrade head` and verify
+4. If good, apply to `main` by running the migration in the Railway deploy
 
 ## Release workflow
 (to be filled in Phase 10)

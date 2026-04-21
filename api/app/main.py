@@ -1,19 +1,17 @@
 import logging
 import time
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import inspect, text
 
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.core.rate_limit import limiter
 from app.api.routes import health, projects, sources, jobs, reviewer, templates
 from app.db.database import Base, engine
-from app.db import models  # noqa: F401
+from app.db import models  # noqa: F401 — imported so SQLAlchemy registers all tables
 
 # ── Logging ──────────────────────────────────────────────────────────
 setup_logging()
@@ -40,20 +38,11 @@ async def friendly_rate_limit_handler(request: Request, exc: RateLimitExceeded) 
 
 app.add_exception_handler(RateLimitExceeded, friendly_rate_limit_handler)
 
-# ── DB bootstrap ─────────────────────────────────────────────────────
-Path("./data").mkdir(parents=True, exist_ok=True)
-Base.metadata.create_all(bind=engine)
-
-# Add new columns to existing tables (safe for SQLite — no-ops if column exists)
-with engine.connect() as conn:
-    inspector = inspect(engine)
-    project_cols = {c["name"] for c in inspector.get_columns("projects")}
-    if "template_id" not in project_cols:
-        conn.execute(text("ALTER TABLE projects ADD COLUMN template_id VARCHAR"))
-        conn.commit()
-    if "user_id" not in project_cols:
-        conn.execute(text("ALTER TABLE projects ADD COLUMN user_id VARCHAR"))
-        conn.commit()
+# ── DB bootstrap ──────────────────────────────────────────────────────
+# In production (Postgres) Alembic manages all schema changes — never auto-create.
+# In local SQLite dev, create_all is a convenience so you can run without Alembic.
+if not settings.is_postgres:
+    Base.metadata.create_all(bind=engine)
 
 logger.info("Database tables ready")
 

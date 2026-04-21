@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # In local dev it falls back to a ./uploads dir relative to the working directory.
     UPLOAD_DIR: str = "./uploads"
 
+    @property
+    def is_postgres(self) -> bool:
+        return self.DATABASE_URL.startswith("postgresql://") or self.DATABASE_URL.startswith("postgres://")
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
