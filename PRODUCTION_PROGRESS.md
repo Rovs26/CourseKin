@@ -1,6 +1,6 @@
 # ReviewFlow Production Migration — Progress Tracker
 
-**Last session ended: 2026-04-21, after Phase 5 commit. Next: Phase 6 (input-hash generation cache).**
+**Last session ended: 2026-04-22, after Phase 6 commit. Next: Phase 7 (abuse prevention hardening).**
 
 This file tracks the status of each phase in the production migration.
 After completing each sub-task, update the status marker: [ ] = not started,
@@ -102,14 +102,14 @@ Manual follow-ups:
 - Live upload test (step 8) must be done once R2 bucket and env vars are configured
 
 ## Phase 6 — Input-hash generation cache
-[ ] Add generation_cache table + model
-[ ] Compute SHA256 of extracted_text + model + prompt_version + sections + counts
-[ ] Check cache before OpenAI call
-[ ] Store result after successful OpenAI call
-[ ] Expose cache hit rate in GET /admin/cache-stats
-[ ] Commit
+[x] Add generation_cache table + model
+[x] Compute SHA256 of extracted_text + model + prompt_version + sections + counts
+[x] Check cache before OpenAI call
+[x] Store result after successful OpenAI call
+[x] Expose cache hit rate in GET /admin/cache-stats
+[x] Commit
 
-Commit SHA:
+Commit SHA: (see below)
 
 ## Phase 7 — Abuse prevention hardening
 [ ] Add python-magic and disposable-email-domains to requirements.txt

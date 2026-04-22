@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # In local dev it falls back to ./uploads. Superseded by R2 in production.
     UPLOAD_DIR: str = "./uploads"
 
+    # ── Admin ─────────────────────────────────────────────────────────────────
+    # Comma-separated list of Clerk user emails that can access /admin/* endpoints
+    ADMIN_EMAILS: str = ""
+
     # ── Cloudflare R2 ─────────────────────────────────────────────────────────
     # From Cloudflare dashboard → R2 → Manage R2 API Tokens
     R2_ACCOUNT_ID: str = ""

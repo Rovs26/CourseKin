@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import time
@@ -7,9 +8,11 @@ from openai import OpenAI
 from app.core.config import settings
 from app.core.utils import utc_now_iso
 from app.db.database import SessionLocal
-from app.db.models import Job, Reviewer
+from app.db.models import Job, Reviewer, GenerationCache
 
 logger = logging.getLogger(__name__)
+
+PROMPT_VERSION = "v1"
 
 # Pricing per million tokens: (input_usd, output_usd)
 PRICING: dict[str, tuple[float, float]] = {
@@ -262,6 +265,28 @@ def _resolve_sections_and_counts(
     return sections, counts
 
 
+def _compute_cache_key(
+    source_text: str,
+    model: str,
+    sections: list[str],
+    counts: dict[str, int],
+    prompt_version: str,
+) -> str:
+    """Compute a stable SHA256 cache key for the generation inputs."""
+    payload = json.dumps(
+        {
+            "source_text": source_text,
+            "model": model,
+            "sections": sorted(sections),
+            "counts": {k: counts[k] for k in sorted(counts)},
+            "prompt_version": prompt_version,
+        },
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def run_generation_in_background(
     job_id: str,
     project_id: str,
@@ -285,31 +310,88 @@ def run_generation_in_background(
         job.updated_at = utc_now_iso()
         db.commit()
 
-        usage_info: dict | None = None
-        try:
-            content_json, usage_info = _call_openai(source_text, resolved_sections, resolved_counts)
-        except Exception as e:
-            logger.error("Generation failed: job=%s error=%s", job_id, e)
-            job.status = "failed"
-            job.stage = "failed"
-            job.error_message = str(e)
-            job.updated_at = utc_now_iso()
-            db.commit()
-            return
+        # ── Cache check ───────────────────────────────────────────────────────
+        cache_key = _compute_cache_key(
+            source_text=source_text,
+            model=settings.OPENAI_MODEL,
+            sections=resolved_sections,
+            counts=resolved_counts,
+            prompt_version=PROMPT_VERSION,
+        )
+        cached_entry = (
+            db.query(GenerationCache)
+            .filter(GenerationCache.cache_key == cache_key)
+            .first()
+        )
 
-        # Record usage after successful OpenAI call
-        if usage_info and user_id:
+        content_json: dict | None = None
+        usage_info: dict | None = None
+        cache_hit = False
+
+        if cached_entry:
+            cache_hit = True
+            content_json = cached_entry.content_json
+            cached_entry.hit_count += 1
+            cached_entry.last_hit_at = utc_now_iso()
+            db.commit()
+            logger.info("Cache hit: job=%s key=%.12s...", job_id, cache_key)
+        else:
+            try:
+                content_json, usage_info = _call_openai(source_text, resolved_sections, resolved_counts)
+            except Exception as e:
+                logger.error("Generation failed: job=%s error=%s", job_id, e)
+                job.status = "failed"
+                job.stage = "failed"
+                job.error_message = str(e)
+                job.updated_at = utc_now_iso()
+                db.commit()
+                return
+
+            # Store result in cache
+            try:
+                from uuid import uuid4
+                cache_row = GenerationCache(
+                    id=str(uuid4()),
+                    cache_key=cache_key,
+                    content_json=content_json,
+                    model=settings.OPENAI_MODEL,
+                    prompt_version=PROMPT_VERSION,
+                    hit_count=0,
+                    created_at=utc_now_iso(),
+                    last_hit_at=None,
+                )
+                db.add(cache_row)
+                db.commit()
+            except Exception as e:
+                # Non-fatal: cache write failure should not break the job
+                logger.warning("Cache write failed: job=%s error=%s", job_id, e)
+                db.rollback()
+
+        # Record usage (cost=0 and cached=True on cache hit)
+        if user_id:
             try:
                 from app.services.usage_service import record_usage  # avoid circular import
-                record_usage(
-                    db=db,
-                    user_id=user_id,
-                    job_id=job_id,
-                    model=usage_info["model"],
-                    prompt_tokens=usage_info["prompt_tokens"],
-                    completion_tokens=usage_info["completion_tokens"],
-                    cost_usd=usage_info["cost_usd"],
-                )
+                if cache_hit:
+                    record_usage(
+                        db=db,
+                        user_id=user_id,
+                        job_id=job_id,
+                        model=settings.OPENAI_MODEL,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        cost_usd=0.0,
+                        cached=True,
+                    )
+                elif usage_info:
+                    record_usage(
+                        db=db,
+                        user_id=user_id,
+                        job_id=job_id,
+                        model=usage_info["model"],
+                        prompt_tokens=usage_info["prompt_tokens"],
+                        completion_tokens=usage_info["completion_tokens"],
+                        cost_usd=usage_info["cost_usd"],
+                    )
             except Exception as e:
                 # Non-fatal: log but don't fail the job
                 logger.warning("Failed to record usage: job=%s error=%s", job_id, e)

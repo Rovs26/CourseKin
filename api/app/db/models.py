@@ -1,4 +1,4 @@
-from sqlalchemy import String, Text, Integer, JSON, Float, Boolean
+from sqlalchemy import String, Text, Integer, JSON, Float, Boolean, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -76,3 +76,17 @@ class UsageLog(Base):
     cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     cached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False, index=True)
+
+
+class GenerationCache(Base):
+    __tablename__ = "generation_cache"
+    __table_args__ = (UniqueConstraint("cache_key", name="uq_generation_cache_key"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    cache_key: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    content_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    model: Mapped[str] = mapped_column(String, nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String, nullable=False)
+    hit_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    last_hit_at: Mapped[str | None] = mapped_column(String, nullable=True)
