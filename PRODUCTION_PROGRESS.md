@@ -109,7 +109,7 @@ Manual follow-ups:
 [x] Expose cache hit rate in GET /admin/cache-stats
 [x] Commit
 
-Commit SHA: (see below)
+Commit SHA: 1e3775d
 
 ## Phase 7 — Abuse prevention hardening
 [ ] Add python-magic and disposable-email-domains to requirements.txt
