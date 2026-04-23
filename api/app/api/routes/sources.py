@@ -24,6 +24,11 @@ from app.schemas.source import (
 from app.core.security import validate_url_safe
 from app.services import storage_service
 from app.services.pdf_service import extract_pdf_text
+from app.services.validation_service import (
+    validate_pdf_bytes,
+    validate_pdf_structure,
+    validate_extracted_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +37,6 @@ router = APIRouter(tags=["Sources"])
 MAX_PDF_BYTES = 25 * 1024 * 1024   # 25 MB — matches R2 presign cap
 MAX_TEXT_SIZE = 500 * 1024          # 500 KB
 MAX_URL_RESPONSE_SIZE = 5 * 1024 * 1024  # 5 MB
-MIN_TEXT_CHARS = 500
 MAX_TEXT_CHARS = 50_000
 
 
@@ -218,6 +222,12 @@ def finalize_upload(
         storage_service.delete_object(payload.storage_key)
         raise HTTPException(status_code=400, detail="PDF is too large (max 25 MB)")
 
+    # MIME check — reject disguised non-PDFs before any parsing
+    validate_pdf_bytes(pdf_bytes)
+
+    # Page count check — reject before paying extraction cost
+    validate_pdf_structure(pdf_bytes)
+
     # Extract text via temp file (extract_pdf_text works on file paths)
     extracted_text = ""
     try:
@@ -226,6 +236,8 @@ def finalize_upload(
             tmp_path = tmp.name
 
         extracted_text = extract_pdf_text(tmp_path)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"PDF text extraction failed: {str(e)}")
     finally:
@@ -234,14 +246,8 @@ def finalize_upload(
         except Exception:
             pass
 
-    if not extracted_text.strip():
-        raise HTTPException(status_code=400, detail="PDF extraction failed: no readable text found")
-
-    if len(extracted_text) < MIN_TEXT_CHARS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"PDF has too little text (found {len(extracted_text)} chars, need at least {MIN_TEXT_CHARS})"
-        )
+    # Reject PDFs that yielded too little text to be useful
+    validate_extracted_text(extracted_text)
 
     # Truncate to MAX_TEXT_CHARS — matches the OpenAI generation limit
     if len(extracted_text) > MAX_TEXT_CHARS:

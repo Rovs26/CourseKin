@@ -22,6 +22,7 @@ class JobGenerateRequest(BaseModel):
     sections: Optional[list[str]] = None  # None = all sections
     counts: Optional[SectionCounts] = None
     merge_mode: MergeMode = "skip"  # skip=additive, replace=overwrite, append=concat lists
+    turnstile_token: Optional[str] = None  # Required for first 3 generations per user
 
 
 class JobResponse(BaseModel):

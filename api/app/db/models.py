@@ -78,6 +78,15 @@ class UsageLog(Base):
     created_at: Mapped[str] = mapped_column(String, nullable=False, index=True)
 
 
+class BannedUser(Base):
+    __tablename__ = "banned_users"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    reason: Mapped[str] = mapped_column(String, nullable=False)
+    banned_at: Mapped[str] = mapped_column(String, nullable=False)
+    banned_by: Mapped[str] = mapped_column(String, nullable=False)  # admin email
+
+
 class GenerationCache(Base):
     __tablename__ = "generation_cache"
     __table_args__ = (UniqueConstraint("cache_key", name="uq_generation_cache_key"),)

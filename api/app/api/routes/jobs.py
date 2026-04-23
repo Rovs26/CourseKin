@@ -10,9 +10,14 @@ from app.core.utils import utc_now_iso
 from app.db.database import get_db
 from app.db.models import Project, Source, Job
 from app.schemas.job import JobGenerateRequest, JobResponse, JobListResponse
+from app.db.models import UsageLog
 from app.services.generation_service import run_generation_in_background
+from app.services.turnstile_service import verify_turnstile
 from app.services.usage_service import check_monthly_quota
 from app.services.templates import get_template
+
+# Number of generations before Turnstile is no longer required
+TURNSTILE_GENERATION_THRESHOLD = 3
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +82,23 @@ def create_generate_job(
             status_code=400,
             detail="Selected source has no usable extracted text yet"
         )
+
+    # Turnstile challenge for the first N generations per user
+    prior_count = (
+        db.query(UsageLog)
+        .filter(UsageLog.user_id == current_user.user_id)
+        .count()
+    )
+    if prior_count < TURNSTILE_GENERATION_THRESHOLD:
+        token = payload.turnstile_token
+        if not token:
+            raise HTTPException(
+                status_code=400,
+                detail="turnstile_required",
+            )
+        remote_ip = request.client.host if request.client else None
+        if not verify_turnstile(token, remote_ip):
+            raise HTTPException(status_code=400, detail="turnstile_failed")
 
     # Quota check uses the authenticated user_id from the JWT
     check_monthly_quota(user_id=current_user.user_id, db=db)

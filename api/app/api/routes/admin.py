@@ -1,13 +1,16 @@
 import logging
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
+from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import GenerationCache, UsageLog
+from app.db.models import BannedUser, GenerationCache, Job, UsageLog
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +26,8 @@ def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> Curr
         raise HTTPException(status_code=403, detail="Forbidden")
     return current_user
 
+
+# ── Cache stats ───────────────────────────────────────────────────────────────
 
 @router.get("/cache-stats")
 def cache_stats(
@@ -47,3 +52,115 @@ def cache_stats(
         "cached_calls": cached_calls,
         "hit_rate": hit_rate,
     }
+
+
+# ── Abuse summary ─────────────────────────────────────────────────────────────
+
+@router.get("/abuse/summary")
+def abuse_summary(
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+):
+    """Aggregate abuse metrics for the last 24 hours."""
+    now = datetime.now(timezone.utc)
+    cutoff_24h = (now - timedelta(hours=24)).isoformat()
+    cutoff_1h = (now - timedelta(hours=1)).isoformat()
+
+    # Users with >5 jobs in the last hour
+    high_volume_users = (
+        db.query(Job.project_id, func.count(Job.id).label("job_count"))
+        .filter(Job.created_at >= cutoff_1h)
+        .group_by(Job.project_id)
+        .having(func.count(Job.id) > 5)
+        .all()
+    )
+
+    # Users with >50% failed job ratio (last 24h, min 3 jobs)
+    all_jobs_24h = (
+        db.query(
+            Job.project_id,
+            func.count(Job.id).label("total"),
+            func.sum(
+                func.case((Job.status == "failed", 1), else_=0)
+            ).label("failed"),
+        )
+        .filter(Job.created_at >= cutoff_24h)
+        .group_by(Job.project_id)
+        .all()
+    )
+    high_failure_users = [
+        {"project_id": r.project_id, "total": r.total, "failed": r.failed or 0}
+        for r in all_jobs_24h
+        if r.total >= 3 and (r.failed or 0) / r.total > 0.5
+    ]
+
+    # Current banned users
+    banned = db.query(BannedUser).all()
+
+    return {
+        "high_volume_last_hour": [
+            {"project_id": r.project_id, "job_count": r.job_count}
+            for r in high_volume_users
+        ],
+        "high_failure_ratio_24h": high_failure_users,
+        "banned_users": [
+            {
+                "user_id": b.user_id,
+                "reason": b.reason,
+                "banned_at": b.banned_at,
+                "banned_by": b.banned_by,
+            }
+            for b in banned
+        ],
+    }
+
+
+# ── Ban / unban ───────────────────────────────────────────────────────────────
+
+class BanRequest(BaseModel):
+    user_id: str
+    reason: str
+
+
+class UnbanRequest(BaseModel):
+    user_id: str
+
+
+@router.post("/abuse/ban")
+def ban_user(
+    payload: BanRequest,
+    db: Session = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin),
+):
+    """Add a user to the ban list."""
+    existing = db.get(BannedUser, payload.user_id)
+    if existing:
+        raise HTTPException(status_code=400, detail="User is already banned")
+
+    banned = BannedUser(
+        user_id=payload.user_id,
+        reason=payload.reason,
+        banned_at=utc_now_iso(),
+        banned_by=admin.email or admin.user_id,
+    )
+    db.add(banned)
+    db.commit()
+    logger.info("User banned: %s by %s (reason: %s)", payload.user_id, admin.email, payload.reason)
+    return {"message": f"User {payload.user_id} has been banned"}
+
+
+@router.post("/abuse/unban")
+def unban_user(
+    payload: UnbanRequest,
+    db: Session = Depends(get_db),
+    admin: CurrentUser = Depends(require_admin),
+):
+    """Remove a user from the ban list."""
+    banned = db.get(BannedUser, payload.user_id)
+    if not banned:
+        raise HTTPException(status_code=404, detail="User is not banned")
+
+    db.delete(banned)
+    db.commit()
+    logger.info("User unbanned: %s by %s", payload.user_id, admin.email)
+    return {"message": f"User {payload.user_id} has been unbanned"}

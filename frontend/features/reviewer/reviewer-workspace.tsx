@@ -235,6 +235,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
           sections: options.sections,
           counts: options.counts,
           merge_mode: options.merge_mode,
+          turnstile_token: options.turnstile_token,
         });
         setCurrentStage(job.stage === "failed" ? null : (job.stage as Exclude<JobStage, "failed">));
         setCurrentJobId(job.id);

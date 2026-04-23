@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # In local dev it falls back to ./uploads. Superseded by R2 in production.
     UPLOAD_DIR: str = "./uploads"
 
+    # ── Turnstile ─────────────────────────────────────────────────────────────
+    # From Cloudflare dashboard → Turnstile → Add Widget
+    TURNSTILE_SECRET_KEY: str = ""
+    TURNSTILE_VERIFY_URL: str = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
     # ── Admin ─────────────────────────────────────────────────────────────────
     # Comma-separated list of Clerk user emails that can access /admin/* endpoints
     ADMIN_EMAILS: str = ""

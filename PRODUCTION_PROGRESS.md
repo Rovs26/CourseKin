@@ -1,6 +1,6 @@
 # ReviewFlow Production Migration — Progress Tracker
 
-**Last session ended: 2026-04-22, after Phase 6 commit. Next: Phase 7 (abuse prevention hardening).**
+**Last session ended: 2026-04-23, after Phase 7 commit. Next: Phase 8 (Sentry + Axiom observability).**
 
 This file tracks the status of each phase in the production migration.
 After completing each sub-task, update the status marker: [ ] = not started,
@@ -112,21 +112,23 @@ Manual follow-ups:
 Commit SHA: 1e3775d
 
 ## Phase 7 — Abuse prevention hardening
-[ ] Add python-magic and disposable-email-domains to requirements.txt
-[ ] MIME-check uploaded PDFs with python-magic
-[ ] Reject PDFs >100 pages
-[ ] Reject extracted text <500 chars or >50000 chars
-[ ] Add Turnstile to frontend signup page
-[ ] Verify Turnstile token on first /jobs/generate call per user
-[ ] Add BannedUser table + ban check middleware
-[ ] Create GET /admin/abuse page (behind Clerk role)
-[ ] Block disposable email domains in Clerk dashboard
-[ ] Commit
+[x] Add python-magic and httpx to requirements.txt
+[x] MIME-check uploaded PDFs with python-magic (validation_service.py)
+[x] Reject PDFs >100 pages (validate_pdf_structure)
+[x] Reject extracted text <500 chars (validate_extracted_text)
+[x] Add Turnstile widget to GenerationOptionsPanel (frontend)
+[x] Verify Turnstile token on first 3 /jobs/generate calls per user
+[x] Add BannedUser table + ban check in get_current_user dependency
+[x] Create GET /admin/abuse page + POST /admin/abuse/ban + unban (frontend + backend)
+[ ] Block disposable email domains in Clerk dashboard (manual — see follow-ups)
+[x] Commit
 
-Commit SHA:
-Manual follow-ups: in Clerk dashboard, enable "Block subaddresses" and
-"Block disposable emails" under User & Authentication → Email, Phone,
-Username.
+Commit SHA: (see below)
+Manual follow-ups:
+- macOS dev: brew install libmagic (done). Linux/Railway Docker: apt-get install libmagic1 (add to Dockerfile in Phase 10).
+- Set TURNSTILE_SECRET_KEY in Railway env vars. Set NEXT_PUBLIC_TURNSTILE_SITE_KEY in Vercel env vars.
+- In Clerk dashboard → User & Authentication → Attack Protection: enable "Bot Protection".
+- In Clerk dashboard → User & Authentication → Email, Phone, Username: enable "Block subaddresses" and "Block disposable email domains".
 
 ## Phase 8 — Observability (Sentry + Axiom)
 [ ] Add sentry-sdk[fastapi] to requirements.txt

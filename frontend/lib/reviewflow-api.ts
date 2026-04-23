@@ -88,6 +88,7 @@ type GenerateReviewerInput = {
   sections?: ReviewerSectionId[];
   counts?: SectionCounts;
   merge_mode?: MergeMode;
+  turnstile_token?: string;
 };
 
 type RegenerateReviewerInput = {
@@ -351,6 +352,44 @@ export function batchGenerateReviewer(input: BatchGenerateInput) {
   return apiRequest<BatchGenerateResult>("/reviewer/batch-generate", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+// Admin
+
+export interface AbuseSummary {
+  high_volume_last_hour: { project_id: string; job_count: number }[];
+  high_failure_ratio_24h: { project_id: string; total: number; failed: number }[];
+  banned_users: { user_id: string; reason: string; banned_at: string; banned_by: string }[];
+}
+
+export interface CacheStats {
+  cache_entries: number;
+  total_cache_hits: number;
+  total_generation_calls: number;
+  cached_calls: number;
+  hit_rate: number;
+}
+
+export function getAbuseSummary() {
+  return apiRequest<AbuseSummary>("/admin/abuse/summary", { method: "GET" });
+}
+
+export function getCacheStats() {
+  return apiRequest<CacheStats>("/admin/cache-stats", { method: "GET" });
+}
+
+export function banUser(user_id: string, reason: string) {
+  return apiRequest<{ message: string }>("/admin/abuse/ban", {
+    method: "POST",
+    body: JSON.stringify({ user_id, reason }),
+  });
+}
+
+export function unbanUser(user_id: string) {
+  return apiRequest<{ message: string }>("/admin/abuse/unban", {
+    method: "POST",
+    body: JSON.stringify({ user_id }),
   });
 }
 

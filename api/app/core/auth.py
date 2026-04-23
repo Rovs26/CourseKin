@@ -19,8 +19,10 @@ import requests as http_requests
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import ExpiredSignatureError, JWTError, jwt
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -128,20 +130,35 @@ def _verify_token(token: str) -> CurrentUser:
 
 # ── FastAPI dependencies ───────────────────────────────────────────────────────
 
+def _check_not_banned(user: CurrentUser, db: Session) -> None:
+    """Raise 403 if the user is in the banned_users table."""
+    # Import here to avoid circular imports (models → database → auth)
+    from app.db.models import BannedUser  # noqa: PLC0415
+    banned = db.get(BannedUser, user.user_id)
+    if banned:
+        raise HTTPException(status_code=403, detail="account_suspended")
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    db: Session = Depends(get_db),
 ) -> CurrentUser:
-    """Require a valid Clerk JWT. Returns CurrentUser or raises 401."""
-    return _verify_token(credentials.credentials)
+    """Require a valid Clerk JWT. Returns CurrentUser or raises 401/403."""
+    user = _verify_token(credentials.credentials)
+    _check_not_banned(user, db)
+    return user
 
 
 def get_current_user_optional(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_optional),
+    db: Session = Depends(get_db),
 ) -> CurrentUser | None:
     """Return CurrentUser if a valid JWT is present, else None."""
     if credentials is None:
         return None
-    return _verify_token(credentials.credentials)
+    user = _verify_token(credentials.credentials)
+    _check_not_banned(user, db)
+    return user
 
 
 # ── Ownership guard ───────────────────────────────────────────────────────────

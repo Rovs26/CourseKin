@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TurnstileWidget } from "@/components/reviewer/turnstile-widget";
 import type {
   ReviewerSectionId,
   SectionCounts,
@@ -51,6 +52,7 @@ export type GenerationOptions = {
   sections: ReviewerSectionId[];
   counts: SectionCounts;
   merge_mode: MergeMode;
+  turnstile_token?: string;
 };
 
 export type MultiSourceGenerationResult = {
@@ -90,6 +92,11 @@ export function GenerationOptionsPanel({
   });
 
   const [mergeMode, setMergeMode] = useState<MergeMode>("append");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  const siteKeyConfigured = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+  // Generate is allowed when: no site key (dev), or token has been acquired
+  const turnstileReady = !siteKeyConfigured || Boolean(turnstileToken);
 
   const toggleSection = (id: ReviewerSectionId) => {
     setSelectedSections((prev) => {
@@ -122,6 +129,7 @@ export function GenerationOptionsPanel({
       sections,
       counts: filteredCounts,
       merge_mode: mergeMode,
+      turnstile_token: turnstileToken ?? undefined,
     });
   };
 
@@ -240,10 +248,15 @@ export function GenerationOptionsPanel({
           </div>
         )}
 
+        <TurnstileWidget
+          onSuccess={setTurnstileToken}
+          onExpire={() => setTurnstileToken(null)}
+        />
+
         <div className="flex gap-3 pt-2">
           <Button
             onClick={handleGenerate}
-            disabled={selectedSections.size === 0}
+            disabled={selectedSections.size === 0 || !turnstileReady}
             className="flex-1 rounded-xl"
           >
             {isRegenerating ? "Regenerate" : "Generate"} ({selectedSections.size}{" "}
