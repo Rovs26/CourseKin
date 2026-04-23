@@ -123,7 +123,7 @@ Commit SHA: 1e3775d
 [ ] Block disposable email domains in Clerk dashboard (manual — see follow-ups)
 [x] Commit
 
-Commit SHA: (see below)
+Commit SHA: c7c0c77
 Manual follow-ups:
 - macOS dev: brew install libmagic (done). Linux/Railway Docker: apt-get install libmagic1 (add to Dockerfile in Phase 10).
 - Set TURNSTILE_SECRET_KEY in Railway env vars. Set NEXT_PUBLIC_TURNSTILE_SITE_KEY in Vercel env vars.
