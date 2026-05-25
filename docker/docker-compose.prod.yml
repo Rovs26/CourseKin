@@ -1,34 +1,45 @@
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
 
   api:
     build: ../api
-    container_name: reviewflow_api
     restart: unless-stopped
+    env_file: ../api/.env
+    environment:
+      APP_ENV: production
+      RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/0}
     ports:
       - "8000:8000"
-    volumes:
-      - reviewflow_db:/app/data
-      - reviewflow_uploads:/app/uploads
-    environment:
-      - APP_ENV=production
-      - DATABASE_URL=sqlite:///./data/reviewflow.db
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    depends_on:
+      - redis
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 20s
+
+  worker:
+    build: ../api
+    restart: unless-stopped
+    env_file: ../api/.env
+    environment:
+      APP_ENV: production
+      RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/0}
+    command: ["python", "-m", "scripts.job_worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   frontend:
     build:
       context: ../frontend
       args:
         - NEXT_PUBLIC_REVIEWFLOW_API_URL=${API_URL:-http://api:8000}
-    container_name: reviewflow_frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -36,8 +47,4 @@ services:
       api:
         condition: service_healthy
     environment:
-      - NODE_ENV=production
-
-volumes:
-  reviewflow_db:
-  reviewflow_uploads:
+      NODE_ENV: production

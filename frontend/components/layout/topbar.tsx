@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Settings } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
@@ -31,9 +32,12 @@ export function Topbar() {
           </Button>
 
           {user?.imageUrl ? (
-            <img
+            <Image
               src={user.imageUrl}
               alt={userName}
+              width={32}
+              height={32}
+              unoptimized
               className="h-8 w-8 rounded-full object-cover"
             />
           ) : (

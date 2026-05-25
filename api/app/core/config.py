@@ -47,6 +47,37 @@ class Settings(BaseSettings):
     # Comma-separated list of Clerk user emails that can access /admin/* endpoints
     ADMIN_EMAILS: str = ""
 
+    # ── Runtime safeguards ─────────────────────────────────────────────────────
+    # Configure a shared Redis-compatible backend in production so limits apply
+    # across API replicas. Leave empty for single-process local development.
+    RATE_LIMIT_STORAGE_URI: str = ""
+    # DB-backed generation worker settings.
+    JOB_POLL_SECONDS: float = 1.0
+    JOB_STALE_SECONDS: int = 300
+    JOB_MAX_ATTEMPTS: int = 3
+
+    # ── Observability ─────────────────────────────────────────────────────────
+    # From Sentry dashboard → Settings → Projects → <project> → Client Keys (DSN)
+    SENTRY_DSN_API: str = ""
+    # From Axiom dashboard → Settings → API Tokens
+    AXIOM_TOKEN: str = ""
+    AXIOM_DATASET: str = "reviewflow-prod"
+    # From Resend dashboard → API Keys (used by daily_digest.py)
+    RESEND_API_KEY: str = ""
+
+    # ── Polar payments ────────────────────────────────────────────────────────
+    # From Polar dashboard → Settings → Developers → Personal Access Token
+    POLAR_ACCESS_TOKEN: str = ""
+    # From Polar dashboard → Settings → Webhooks → endpoint → Signing Secret
+    # Format: whsec_<base64>
+    POLAR_WEBHOOK_SECRET: str = ""
+    # Keep disabled until live checkout/webhook/cancellation verification passes.
+    BILLING_ENABLED: bool = False
+    # From Polar dashboard → Products → Plus Monthly → product ID
+    POLAR_PLUS_MONTHLY_PRODUCT_ID: str = ""
+    # From Polar dashboard → Products → Plus Yearly → product ID
+    POLAR_PLUS_YEARLY_PRODUCT_ID: str = ""
+
     # ── Cloudflare R2 ─────────────────────────────────────────────────────────
     # From Cloudflare dashboard → R2 → Manage R2 API Tokens
     R2_ACCOUNT_ID: str = ""
@@ -65,6 +96,33 @@ class Settings(BaseSettings):
     @property
     def is_postgres(self) -> bool:
         return self.DATABASE_URL.startswith("postgresql://") or self.DATABASE_URL.startswith("postgres://")
+
+    def validate_production(self) -> None:
+        """Fail startup rather than serving a production instance without safeguards."""
+        if self.APP_ENV != "production":
+            return
+        required = {
+            "PostgreSQL DATABASE_URL": self.is_postgres,
+            "FRONTEND_URL": bool(self.FRONTEND_URL),
+            "OPENAI_API_KEY": bool(self.OPENAI_API_KEY),
+            "CLERK_JWKS_URL": bool(self.CLERK_JWKS_URL),
+            "CLERK_SECRET_KEY": bool(self.CLERK_SECRET_KEY),
+            "TURNSTILE_SECRET_KEY": bool(self.TURNSTILE_SECRET_KEY),
+            "RATE_LIMIT_STORAGE_URI": bool(self.RATE_LIMIT_STORAGE_URI),
+            "R2_ENDPOINT_URL/R2 credentials": self.r2_configured,
+        }
+        if self.BILLING_ENABLED:
+            required.update(
+                {
+                    "POLAR_ACCESS_TOKEN": bool(self.POLAR_ACCESS_TOKEN),
+                    "POLAR_WEBHOOK_SECRET": bool(self.POLAR_WEBHOOK_SECRET),
+                    "POLAR_PLUS_MONTHLY_PRODUCT_ID": bool(self.POLAR_PLUS_MONTHLY_PRODUCT_ID),
+                    "POLAR_PLUS_YEARLY_PRODUCT_ID": bool(self.POLAR_PLUS_YEARLY_PRODUCT_ID),
+                }
+            )
+        missing = [name for name, configured in required.items() if not configured]
+        if missing:
+            raise RuntimeError(f"Production configuration is incomplete: {', '.join(missing)}")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

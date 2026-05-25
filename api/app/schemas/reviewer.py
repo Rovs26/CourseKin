@@ -1,7 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 
-from app.schemas.job import SectionCounts
+from app.schemas.job import MergeMode, SectionCounts, VALID_SECTIONS
 
 
 class DefinitionItem(BaseModel):
@@ -53,7 +53,15 @@ class ReviewerRegenerateRequest(BaseModel):
     source_id: Optional[str] = None
     sections: Optional[list[str]] = None  # None = all sections
     counts: Optional[SectionCounts] = None
-    merge_mode: str = "skip"  # skip | replace | append
+    merge_mode: MergeMode = "skip"
+    turnstile_token: Optional[str] = None
+
+    @field_validator("sections")
+    @classmethod
+    def validate_sections(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        if v is not None and any(section not in VALID_SECTIONS for section in v):
+            raise ValueError("Unknown reviewer section")
+        return v
 
 
 class SourceGenerationConfig(BaseModel):
@@ -61,13 +69,21 @@ class SourceGenerationConfig(BaseModel):
     source_id: str
     sections: Optional[list[str]] = None
     counts: Optional[SectionCounts] = None
-    merge_mode: str = "append"  # Default to append for multi-source
+    merge_mode: MergeMode = "append"  # Default to append for multi-source
+
+    @field_validator("sections")
+    @classmethod
+    def validate_sections(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        if v is not None and any(section not in VALID_SECTIONS for section in v):
+            raise ValueError("Unknown reviewer section")
+        return v
 
 
 class BatchGenerateRequest(BaseModel):
     """Generate from multiple sources sequentially, each with its own config."""
     project_id: str
     sources: list[SourceGenerationConfig]
+    turnstile_token: Optional[str] = None
 
 
 class BatchGenerateResponse(BaseModel):

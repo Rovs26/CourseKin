@@ -1,7 +1,7 @@
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser, get_current_user, require_owner
@@ -10,14 +10,14 @@ from app.core.utils import utc_now_iso
 from app.db.database import get_db
 from app.db.models import Project, Source, Job
 from app.schemas.job import JobGenerateRequest, JobResponse, JobListResponse
-from app.db.models import UsageLog
-from app.services.generation_service import run_generation_in_background
-from app.services.turnstile_service import verify_turnstile
-from app.services.usage_service import check_monthly_quota
+from app.services.generation_guard_service import require_generation_challenge
+from app.services.usage_service import (
+    check_daily_cap,
+    check_monthly_quota,
+    lock_quota_for_user,
+    reserve_usage,
+)
 from app.services.templates import get_template
-
-# Number of generations before Turnstile is no longer required
-TURNSTILE_GENERATION_THRESHOLD = 3
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,6 @@ def _pick_source_for_project(db: Session, project_id: str, source_id: str | None
 def create_generate_job(
     request: Request,
     payload: JobGenerateRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
@@ -83,68 +82,46 @@ def create_generate_job(
             detail="Selected source has no usable extracted text yet"
         )
 
-    # Turnstile challenge for the first N generations per user
-    prior_count = (
-        db.query(UsageLog)
-        .filter(UsageLog.user_id == current_user.user_id)
-        .count()
-    )
-    if prior_count < TURNSTILE_GENERATION_THRESHOLD:
-        token = payload.turnstile_token
-        if not token:
-            raise HTTPException(
-                status_code=400,
-                detail="turnstile_required",
-            )
-        remote_ip = request.client.host if request.client else None
-        if not verify_turnstile(token, remote_ip):
-            raise HTTPException(status_code=400, detail="turnstile_failed")
-
-    # Quota check uses the authenticated user_id from the JWT
+    require_generation_challenge(request, payload.turnstile_token, current_user.user_id, db)
+    lock_quota_for_user(current_user.user_id, db)
+    check_daily_cap(user_id=current_user.user_id, db=db)
     check_monthly_quota(user_id=current_user.user_id, db=db)
 
     now = utc_now_iso()
-    job = Job(
-        id=str(uuid4()),
-        project_id=payload.project_id,
-        source_id=source.id,
-        job_type=payload.job_type,
-        status="processing",
-        stage="generating",
-        created_at=now,
-        updated_at=now,
-        error_message=None,
-    )
-
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-
     sections = payload.sections
     counts = payload.counts.model_dump(exclude_none=True) if payload.counts else None
-
-    # Fall back to template defaults when no explicit sections/counts
     if sections is None and counts is None and project.template_id:
         template = get_template(project.template_id)
         if template:
             sections = template.sections
             counts = dict(template.counts)
 
-    logger.info(
-        "Generation job started: job=%s project=%s source=%s",
-        job.id, job.project_id, job.source_id,
+    job = Job(
+        id=str(uuid4()),
+        project_id=payload.project_id,
+        source_id=source.id,
+        user_id=current_user.user_id,
+        job_type=payload.job_type,
+        status="queued",
+        stage="queued",
+        generation_options={
+            "sections": sections,
+            "counts": counts,
+            "merge_mode": payload.merge_mode,
+        },
+        created_at=now,
+        updated_at=now,
+        error_message=None,
     )
 
-    background_tasks.add_task(
-        run_generation_in_background,
-        job_id=job.id,
-        project_id=job.project_id,
-        source_id=job.source_id,
-        source_text=source_text,
-        user_id=current_user.user_id,
-        sections=sections,
-        counts=counts,
-        merge_mode=payload.merge_mode,
+    db.add(job)
+    reserve_usage(db, current_user.user_id, job.id)
+    db.commit()
+    db.refresh(job)
+
+    logger.info(
+        "Generation job queued: job=%s project=%s source=%s",
+        job.id, job.project_id, job.source_id,
     )
 
     return _job_to_dict(job)

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install API dependencies
+        run: pip install -r api/requirements.txt pytest
+
+      - name: Smoke-test import
+        run: cd api && python -c "from app.main import app; print('import ok')"
+
+      - name: Run Alembic migrations (SQLite)
+        run: cd api && alembic upgrade head
+        env:
+          DATABASE_URL: sqlite:///./data/reviewflow.db
+
+      - name: Run API tests
+        run: cd api && python -m pytest -q
+
+  web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Audit production dependencies
+        run: cd frontend && npm audit --audit-level=high
+
+      - name: Lint frontend
+        run: cd frontend && npm run lint
+
+      - name: Build frontend
+        run: cd frontend && npm run build
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_REVIEWFLOW_API_URL: https://api.reviewflow.app
+          NEXT_PUBLIC_BILLING_ENABLED: "false"
+          NEXT_PUBLIC_APP_ENV: production

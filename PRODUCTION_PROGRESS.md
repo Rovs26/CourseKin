@@ -1,6 +1,6 @@
 # ReviewFlow Production Migration — Progress Tracker
 
-**Last session ended: 2026-04-23, after Phase 7 commit. Next: Phase 8 (Sentry + Axiom observability).**
+**Hardening in progress: May 25, 2026. This branch addresses turnover-review launch blockers before any production deploy.**
 
 This file tracks the status of each phase in the production migration.
 After completing each sub-task, update the status marker: [ ] = not started,
@@ -131,52 +131,112 @@ Manual follow-ups:
 - In Clerk dashboard → User & Authentication → Email, Phone, Username: enable "Block subaddresses" and "Block disposable email domains".
 
 ## Phase 8 — Observability (Sentry + Axiom)
-[ ] Add sentry-sdk[fastapi] to requirements.txt
-[ ] Initialize Sentry in api/app/main.py
-[ ] Install @sentry/nextjs in frontend
-[ ] Configure Sentry in frontend via sentry.*.config.ts
-[ ] Add JSON formatter + Axiom HTTP handler to logging_config.py
-[ ] Create scripts/daily_digest.py
-[ ] Document Axiom alert rules in DEPLOYMENT.md
-[ ] Commit
+[x] Add sentry-sdk[fastapi] to requirements.txt
+[x] Initialize Sentry in api/app/main.py
+[x] Install @sentry/nextjs in frontend
+[x] Configure Sentry in frontend via sentry.*.config.ts
+[x] Add JSON formatter + Axiom HTTP handler to logging_config.py
+[x] Create scripts/daily_digest.py
+[x] Document Axiom alert rules in DEPLOYMENT.md
+[x] Commit
 
 Commit SHA:
-Manual follow-ups: in Axiom dashboard, create alerts for: error rate >5/min,
-OpenAI spend >$5/day, failed_jobs ratio >20%. Set up the daily digest cron
-on Railway in Phase 10.
+Manual follow-ups:
+- Set SENTRY_DSN_API in Railway env vars. Set NEXT_PUBLIC_SENTRY_DSN in Vercel env vars.
+- Set AXIOM_TOKEN and AXIOM_DATASET in Railway env vars.
+- Set RESEND_API_KEY in Railway env vars. Set ADMIN_EMAILS in Railway env vars.
+- Set NEXT_PUBLIC_APP_ENV=production in Vercel env vars.
+- Set SENTRY_AUTH_TOKEN in Vercel/CI env vars (for source map uploads during builds).
+- In next.config.ts, replace "your-org-slug" with your actual Sentry org slug.
+- In Axiom dashboard, create the 3 alert monitors documented in DEPLOYMENT.md.
+- Schedule daily_digest.py cron on Railway in Phase 10.
 
 ## Phase 9 — Legal and compliance
-[ ] Update /privacy page with AI disclaimer, subprocessor list, GDPR rights
-[ ] Update /terms page with age-16+ requirement, user-content rules, AI accuracy disclaimer
-[ ] Add /legal/dpa page listing subprocessors
-[ ] Create cookie consent banner (EU-only via Cloudflare CF-IPCountry header)
-[ ] Create DELETE /users/me endpoint (Clerk delete + data purge + R2 purge)
-[ ] Create GET /users/me/export endpoint (ZIP of user data)
-[ ] Link both from /settings/account on frontend
-[ ] Commit
+[x] Update /privacy page with AI disclaimer, subprocessor list, GDPR rights
+[x] Update /terms page with age-16+ requirement, user-content rules, AI accuracy disclaimer
+[x] Add /legal/dpa page listing subprocessors
+[x] Create cookie consent banner (EU-only via Cloudflare CF-IPCountry header)
+[x] Create DELETE /users/me endpoint (Clerk delete + data purge + R2 purge)
+[x] Create GET /users/me/export endpoint (ZIP of user data)
+[x] Link both from /settings/account on frontend
+[x] Commit
 
 Commit SHA:
-Manual follow-ups: sign DPAs with OpenAI (platform.openai.com/account/data-controls),
-Clerk (automatic for paid tier), Cloudflare (in dashboard under Billing),
-Neon (automatic on Launch plan). Download all four DPA PDFs and store in
-a `legal/signed-dpas/` folder outside git.
+Manual follow-ups:
+- Sign DPAs with OpenAI (platform.openai.com/account/data-controls), Clerk (automatic for
+  paid tier), Cloudflare (in dashboard under Billing), Neon (automatic on Launch plan).
+  Download all four DPA PDFs and store in a `legal/signed-dpas/` folder outside git.
+- Set CLERK_SECRET_KEY in Railway env vars (needed for account deletion to call Clerk API).
+- Install clerk-backend-api in production: it is in requirements.txt.
+- The cookie consent banner relies on the CF-IPCountry header set by Cloudflare. In local
+  dev this header is absent, so no banner appears. Test with a VPN or Cloudflare Workers
+  once the site is deployed behind Cloudflare.
 
 ## Phase 10 — Deployment configuration
-[ ] Rewrite api/Dockerfile as multi-stage, non-root, slim
-[ ] Add HEALTHCHECK to Dockerfile
-[ ] Create railway.toml
-[ ] Create vercel.json (if needed)
-[ ] Create .github/workflows/ci.yml
-[ ] Create scripts/backup-db.sh
-[ ] Document every env var in DEPLOYMENT.md
-[ ] Document release workflow in DEPLOYMENT.md
-[ ] Commit
+[x] Rewrite api/Dockerfile as multi-stage, non-root, slim
+[x] Add HEALTHCHECK to Dockerfile
+[x] Create railway.toml
+[ ] Create vercel.json — SKIPPED (Vercel auto-detects Next.js; no rewrites needed)
+[x] Create .github/workflows/ci.yml
+[x] Create scripts/backup-db.sh
+[x] Document every env var in DEPLOYMENT.md
+[x] Document release workflow in DEPLOYMENT.md
+[x] Commit
 
 Commit SHA:
-Manual follow-ups: deploy API to Railway, deploy frontend to Vercel,
-configure custom domains (api.reviewflow.app for API, reviewflow.app for
-web), set all environment variables, run alembic upgrade head, verify
-Sentry is receiving events from both services.
 
-## Phase 11 — Polar payments (optional, post-launch)
-[ ] See Phase 11 prompt when ready to monetize
+### Manual deployment steps (do these in order)
+[ ] a) Railway: connect GitHub repo, select "Deploy from railway.toml", wait for first build
+[ ] b) Railway: add all API env vars from DEPLOYMENT.md (API section)
+[ ] c) Railway: add custom domain api.reviewflow.app; point CNAME in Cloudflare DNS to Railway hostname; start with gray cloud (DNS only) so Railway provisions TLS; once healthy flip to orange cloud (proxied)
+[ ] d) Vercel: connect repo, set root directory to frontend/, add all env vars from DEPLOYMENT.md (Frontend section)
+[ ] e) Vercel: add custom domain reviewflow.app; follow Vercel DNS instructions in Cloudflare
+[ ] f) Cloudflare: enable WAF Managed Rules on both api.reviewflow.app and reviewflow.app (free tier); enable Bot Fight Mode
+[ ] g) Hit https://api.reviewflow.app/health — verify response is {"status":"ok","version":"0.1.0","env":"production"}
+[ ] h) Hit https://reviewflow.app — verify marketing page renders
+[ ] i) Sign up as a test user end-to-end: upload a PDF, generate, verify Axiom gets logs, Neon has data, R2 has the file
+
+### Railway cron services (set up after main API is healthy)
+[ ] Daily digest: new Railway service in same project with root directory `api/`, start command = `python -m scripts.daily_digest`, cron schedule = `0 9 * * *` (09:00 UTC = 17:00 Manila); reference all vars from main API service
+[ ] Daily backup: new Railway service, start command = `bash scripts/backup-db.sh`, cron schedule = `0 2 * * *`; set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY scoped to reviewflow-backups R2 bucket
+[ ] Create R2 bucket `reviewflow-backups` (separate from uploads); set lifecycle rule: delete objects older than 30 days
+
+## Phase 11 — Polar payments
+[x] Add Subscription model + Alembic migration (d4f2a8bc91e3)
+[x] Add Polar config vars to config.py
+[x] Create POST /billing/checkout (Polar checkout session via direct API)
+[x] Create GET /billing/subscription (return current plan status)
+[x] Create POST /webhooks/polar (Svix signature verified, upserts Subscription row)
+[x] Update usage_service: tier-aware monthly quota + daily cap (free=3/day, plus=50/day)
+[x] Call check_daily_cap in jobs.py alongside check_monthly_quota
+[x] Add Billing page at /settings/billing (plan badge, upgrade cards, manage link)
+[x] Add Billing to sidebar nav
+[x] Rewrite pricing page with real plans and upgrade CTAs
+[x] Commit
+
+Commit SHA:
+
+### Manual follow-ups
+[ ] Sign up at polar.sh and complete seller onboarding (Philippines tax ID or individual seller)
+[ ] Create "Plus Monthly" product at $5.99 — note its Product ID from the dashboard
+[ ] Create "Plus Yearly" product at $39.99 — note its Product ID
+[ ] Set POLAR_ACCESS_TOKEN in Railway env vars (Settings → Developers → Personal Access Token)
+[ ] Add Polar webhook endpoint in Polar dashboard pointing to https://api.reviewflow.app/webhooks/polar; enable events: subscription.created, subscription.updated, subscription.canceled, subscription.revoked; copy the Signing Secret
+[ ] Set POLAR_WEBHOOK_SECRET (whsec_...) in Railway env vars
+[ ] Set POLAR_PLUS_MONTHLY_PRODUCT_ID = <product ID from dashboard> in Railway env vars
+[ ] Set POLAR_PLUS_YEARLY_PRODUCT_ID = <product ID from dashboard> in Railway env vars
+[ ] Test end-to-end: sign up, go to /settings/billing, click upgrade, complete Polar checkout, verify subscription row appears in DB, verify plan badge changes to Plus
+[ ] Verify webhook by checking Railway logs for "Subscription upserted" after a test purchase
+[ ] Keep `BILLING_ENABLED=false` until checkout, webhook idempotency, subscription revocation, and deletion tests succeed; then explicitly set it to `true`.
+
+## Turnover hardening — SaaS launch blockers
+[x] Align public API environment variable naming across frontend and CI/deployment docs
+[x] Switch Polar checkout to the current product-based API and gate paid checkout behind `BILLING_ENABLED`
+[x] Enforce upload size before/after R2 transfer and use lifecycle-compatible temporary keys
+[x] Validate each URL redirect target before fetching remote content
+[x] Apply Turnstile and reserved quota accounting to generate, regenerate, and batch requests
+[x] Scope generated-content cache rows per user and delete/export them with account data
+[x] Replace HTTP background generation with DB-backed jobs and a dedicated worker entry point
+[x] Correct admin failure aggregation and add enforceable CI test coverage
+[x] Fail production startup when required Postgres/auth/R2/Turnstile/shared limiter variables are absent
+[ ] Live acceptance: R2 upload, Clerk deletion, Polar sandbox/live webhook flow, Redis, worker restart recovery, backup restore

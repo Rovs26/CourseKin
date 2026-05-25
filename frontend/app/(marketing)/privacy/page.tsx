@@ -17,89 +17,220 @@ export default function PrivacyPage() {
 
       <article className="mx-auto max-w-3xl px-6 py-16">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Privacy Policy</h1>
-        <p className="mt-2 text-sm text-slate-500">Last updated: April 15, 2026</p>
+        <p className="mt-2 text-sm text-slate-500">Last updated: May 25, 2026</p>
 
         <div className="mt-10 space-y-8 text-sm leading-7 text-slate-600">
           <section>
             <h2 className="text-lg font-semibold text-slate-900">1. What We Collect</h2>
-            <p className="mt-3">
-              When you use ReviewFlow, we collect the following information:
-            </p>
+            <p className="mt-3">When you use ReviewFlow, we collect the following categories of information:</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li><strong>Account information:</strong> Your name and email address, provided through our authentication provider (Clerk).</li>
-              <li><strong>Content you upload:</strong> Text, PDFs, and URLs you submit as source material for reviewer generation.</li>
-              <li><strong>Generated content:</strong> Summaries, key points, definitions, Q&A, quiz questions, and flashcards created from your sources.</li>
-              <li><strong>Usage data:</strong> Basic request logs including timestamps, API endpoints accessed, and response times. We do not track page views or use analytics cookies.</li>
+              <li>
+                <strong>Account information:</strong> Your name, email address, and Clerk user ID,
+                provided when you sign up through our authentication provider (Clerk).
+              </li>
+              <li>
+                <strong>Content you provide:</strong> PDFs you upload, URLs you paste, and text you
+                enter as source material. Generated output (flashcards, summaries, Q&amp;A, quizzes)
+                derived from that content.
+              </li>
+              <li>
+                <strong>Technical data:</strong> IP address, browser user agent, timestamps of
+                requests, API response times, and error logs. This data is used for security,
+                abuse prevention, and service reliability.
+              </li>
+              <li>
+                <strong>Payment information:</strong> If you subscribe to a paid plan, payments are
+                processed by Polar (our merchant of record). ReviewFlow never sees or stores your
+                card number or full payment details.
+              </li>
             </ul>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold text-slate-900">2. How We Use Your Data</h2>
             <ul className="mt-3 list-disc space-y-1 pl-5">
-              <li>To generate study reviewers from your uploaded content.</li>
-              <li>To store your projects and generated reviewers so you can access them later.</li>
-              <li>To improve service reliability through error monitoring and request logging.</li>
+              <li>To generate study materials from your uploaded content.</li>
+              <li>To store your projects and generated output so you can access them later.</li>
+              <li>To enforce usage quotas, rate limits, and abuse prevention.</li>
+              <li>To improve service reliability through error monitoring and structured logging.</li>
+              <li>To send transactional emails (e.g., account-related notifications) via Resend.</li>
             </ul>
             <p className="mt-3">
-              We do not sell your data. We do not use your content to train AI models. Your uploaded materials are used solely to generate your requested reviewer content via the OpenAI API.
+              We do not sell your data. We do not use your content to train AI models.
+              We do not use advertising cookies or share data with ad networks.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-slate-900">3. Third-Party Services</h2>
-            <p className="mt-3">We use the following third-party services:</p>
+            <h2 className="text-lg font-semibold text-slate-900">3. AI-Specific Disclosures</h2>
+            <ul className="mt-3 list-disc space-y-1 pl-5">
+              <li>
+                Your uploaded text is sent to the <strong>OpenAI API</strong> to generate study
+                materials. This processing is covered by OpenAI&apos;s API data usage policy.
+              </li>
+              <li>
+                OpenAI states that API data is <strong>not used to train models by default</strong>.
+                Abuse monitoring logs may retain content for up to 30 days by default, subject to
+                legal, security, and feature-specific exceptions in OpenAI&apos;s current policy.
+              </li>
+              <li>
+                ReviewFlow does <strong>not</strong> use your content to train our own models.
+              </li>
+              <li>
+                <strong>Generated output may contain errors.</strong> ReviewFlow is a study aid,
+                not a source of truth. Always verify important facts against your original source
+                material.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-slate-900">4. Subprocessors</h2>
+            <p className="mt-3">
+              We rely on the following third-party subprocessors to operate ReviewFlow. Each
+              subprocessor is bound by a Data Processing Agreement (DPA) and applicable data
+              protection law. Full details are on our{" "}
+              <Link href="/legal/dpa" className="font-medium text-slate-900 underline">
+                Subprocessor List
+              </Link>
+              .
+            </p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li><strong>OpenAI API:</strong> Your source text is sent to OpenAI to generate reviewer content. OpenAI&apos;s data usage policies apply to this processing. Per OpenAI&apos;s API data usage policy, API inputs and outputs are not used to train their models.</li>
-              <li><strong>Clerk:</strong> Handles user authentication. Clerk stores your email address and login credentials according to their privacy policy.</li>
+              <li><strong>OpenAI</strong> — AI content generation (USA)</li>
+              <li><strong>Clerk</strong> — Authentication and user management (USA)</li>
+              <li><strong>Cloudflare</strong> — Hosting, CDN, and file storage via R2 (global)</li>
+              <li><strong>Neon</strong> — PostgreSQL database (USA)</li>
+              <li><strong>Sentry</strong> — Error tracking (USA / EU)</li>
+              <li><strong>Axiom</strong> — Structured logging (USA)</li>
+              <li><strong>Resend</strong> — Transactional email (USA)</li>
+              <li><strong>Railway</strong> — Backend hosting (USA)</li>
+              <li><strong>Vercel</strong> — Frontend hosting (USA)</li>
+              <li>
+                <strong>Polar</strong> — Payments and billing, merchant of record (Sweden / USA) —
+                only active if you subscribe to a paid plan
+              </li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-slate-900">4. Data Storage and Security</h2>
-            <p className="mt-3">
-              Your data is stored in our database. Uploaded PDF files are stored on our server. We use standard security practices including HTTPS encryption, rate limiting, and input validation. However, no system is 100% secure, and we cannot guarantee absolute security.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-slate-900">5. Data Retention and Deletion</h2>
-            <p className="mt-3">
-              Your projects, sources, and generated reviewers are retained as long as your account is active. You can delete individual projects at any time, which permanently removes the project, its sources, uploaded files, and generated reviewer content. To delete your account entirely, contact us at the email below.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-slate-900">6. Your Rights</h2>
-            <p className="mt-3">You have the right to:</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>Access the data we store about you.</li>
-              <li>Delete your projects and uploaded content at any time.</li>
-              <li>Request complete account deletion.</li>
-              <li>Export your generated reviewer content as PDF.</li>
+            <h2 className="text-lg font-semibold text-slate-900">5. Data Retention</h2>
+            <ul className="mt-3 list-disc space-y-1 pl-5">
+              <li>
+                Your projects, sources, and generated content are retained as long as your account
+                is active.
+              </li>
+              <li>
+                After account deletion, your personal data is wiped from our systems within{" "}
+                <strong>30 days</strong>, including from database backups.
+              </li>
+              <li>
+                Uploaded files stored on Cloudflare R2 are deleted at the time of account
+                deletion or when you delete the associated project.
+              </li>
+              <li>
+                OpenAI API abuse monitoring logs may retain inputs and outputs for up to 30 days
+                by default, with the exceptions described in OpenAI&apos;s API data policy.
+              </li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-slate-900">7. Cookies</h2>
+            <h2 className="text-lg font-semibold text-slate-900">6. International Transfers</h2>
             <p className="mt-3">
-              ReviewFlow uses only essential cookies required for authentication and session management. We do not use advertising or analytics cookies. Local preferences (theme, export settings) are stored in your browser&apos;s localStorage and are never sent to our servers.
+              ReviewFlow is operated from the Philippines and uses subprocessors primarily based
+              in the United States. If you are located in the European Economic Area (EEA), United
+              Kingdom, or Switzerland, your personal data may be transferred to countries that do
+              not have the same data protection laws as your home country.
+            </p>
+            <p className="mt-3">
+              For transfers from the EEA, UK, or Switzerland to the USA, we rely on Standard
+              Contractual Clauses (SCCs) incorporated into the DPAs we have signed with each
+              subprocessor. A list of those subprocessors and their safeguards is available on our{" "}
+              <Link href="/legal/dpa" className="font-medium text-slate-900 underline">
+                Subprocessor List
+              </Link>
+              .
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-slate-900">8. Changes to This Policy</h2>
+            <h2 className="text-lg font-semibold text-slate-900">7. Your Rights</h2>
+            <p className="mt-3">Depending on where you live, you have the following rights:</p>
+            <p className="mt-2 font-medium text-slate-800">GDPR (EU/UK/EEA residents)</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              <li><strong>Access:</strong> Request a copy of the data we hold about you.</li>
+              <li><strong>Rectification:</strong> Ask us to correct inaccurate data.</li>
+              <li><strong>Erasure:</strong> Request deletion of your personal data (&quot;right to be forgotten&quot;).</li>
+              <li><strong>Portability:</strong> Receive your data in a structured, machine-readable format.</li>
+              <li><strong>Objection:</strong> Object to processing based on legitimate interests.</li>
+              <li><strong>Restriction:</strong> Ask us to limit processing of your data in certain circumstances.</li>
+            </ul>
+            <p className="mt-3 font-medium text-slate-800">CCPA (California residents)</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              <li>The right to know what personal information we collect and how we use it.</li>
+              <li>The right to delete your personal information.</li>
+              <li>The right to opt out of the sale of personal information (we do not sell data).</li>
+              <li>The right to non-discrimination for exercising your privacy rights.</li>
+            </ul>
             <p className="mt-3">
-              We may update this policy from time to time. We will notify users of significant changes by updating the date at the top of this page.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-slate-900">9. Contact</h2>
-            <p className="mt-3">
-              If you have questions about this privacy policy or your data, contact us at{" "}
+              To exercise any of these rights, email{" "}
               <a href="mailto:privacy@reviewflow.app" className="font-medium text-slate-900 underline">
                 privacy@reviewflow.app
-              </a>.
+              </a>{" "}
+              or use the <strong>Export my data</strong> and <strong>Delete my account</strong>{" "}
+              buttons in{" "}
+              <Link href="/settings/account" className="font-medium text-slate-900 underline">
+                Settings → Account
+              </Link>
+              .
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-slate-900">8. Children</h2>
+            <p className="mt-3">
+              ReviewFlow is not intended for users under the age of 16. We do not knowingly
+              collect personal information from anyone under 16. If we become aware that a user
+              is under 16, we will delete their account and associated data promptly. If you
+              believe a child under 16 has provided us with personal information, please contact
+              us at{" "}
+              <a href="mailto:privacy@reviewflow.app" className="font-medium text-slate-900 underline">
+                privacy@reviewflow.app
+              </a>
+              .
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-slate-900">9. Cookies</h2>
+            <p className="mt-3">
+              ReviewFlow uses only essential cookies required for authentication and session
+              management (set by Clerk) and for storing your cookie consent preference. We do
+              not use advertising or analytics cookies. For users in the EU/EEA/UK, a cookie
+              consent banner will appear on your first visit.
+            </p>
+            <p className="mt-3">
+              Local preferences (theme, export settings) are stored in your browser&apos;s
+              localStorage and are never sent to our servers.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-slate-900">10. Changes to This Policy</h2>
+            <p className="mt-3">
+              We may update this policy from time to time. We will notify users of significant
+              changes by updating the date at the top of this page.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-slate-900">11. Contact</h2>
+            <p className="mt-3">
+              Questions about this privacy policy or your data? Contact us at{" "}
+              <a href="mailto:privacy@reviewflow.app" className="font-medium text-slate-900 underline">
+                privacy@reviewflow.app
+              </a>
+              .
             </p>
           </section>
         </div>
@@ -111,6 +242,7 @@ export default function PrivacyPage() {
           <div className="flex gap-4 text-sm text-slate-500">
             <Link href="/privacy" className="font-medium text-slate-900">Privacy</Link>
             <Link href="/terms" className="hover:text-slate-900">Terms</Link>
+            <Link href="/legal/dpa" className="hover:text-slate-900">Subprocessors</Link>
           </div>
         </div>
       </footer>

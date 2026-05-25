@@ -4,6 +4,7 @@ import type { Source } from "@/types/source";
 
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_REVIEWFLOW_API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   "http://localhost:8000"
 ).replace(/\/+$/, "");
@@ -97,6 +98,7 @@ type RegenerateReviewerInput = {
   sections?: ReviewerSectionId[];
   counts?: SectionCounts;
   merge_mode?: MergeMode;
+  turnstile_token?: string;
 };
 
 export type SourceGenerationConfig = {
@@ -109,6 +111,7 @@ export type SourceGenerationConfig = {
 type BatchGenerateInput = {
   project_id: string;
   sources: SourceGenerationConfig[];
+  turnstile_token?: string;
 };
 
 export type BatchGenerateResult = {
@@ -248,6 +251,7 @@ export async function presignAndUploadPDF(
       project_id: projectId,
       filename: file.name,
       content_type: "application/pdf",
+      size_bytes: file.size,
     }),
   });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TurnstileWidget } from "@/components/reviewer/turnstile-widget";
@@ -57,11 +57,11 @@ export type GenerationOptions = {
 
 export type MultiSourceGenerationResult = {
   configs: SourceGenerationConfig[];
+  turnstile_token?: string;
 };
 
 export function GenerationOptionsPanel({
   onGenerate,
-  onBatchGenerate,
   onCancel,
   isRegenerating = false,
   defaultSections,
@@ -70,7 +70,6 @@ export function GenerationOptionsPanel({
   sectionOwnership,
 }: {
   onGenerate: (options: GenerationOptions) => void;
-  onBatchGenerate?: (configs: SourceGenerationConfig[]) => void;
   onCancel: () => void;
   isRegenerating?: boolean;
   defaultSections?: ReviewerSectionId[];
@@ -288,7 +287,7 @@ export function MultiSourcePanel({
   sectionOwnership,
 }: {
   sources: Source[];
-  onBatchGenerate: (configs: SourceGenerationConfig[]) => void;
+  onBatchGenerate: (configs: SourceGenerationConfig[], turnstileToken?: string) => void;
   onCancel: () => void;
   defaultSections?: ReviewerSectionId[];
   defaultCounts?: SectionCounts;
@@ -318,6 +317,9 @@ export function MultiSourcePanel({
   });
 
   const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(new Set());
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const siteKeyConfigured = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+  const turnstileReady = !siteKeyConfigured || Boolean(turnstileToken);
 
   const toggleSourceSelected = (sourceId: string) => {
     setSelectedSourceIds((prev) => {
@@ -410,7 +412,7 @@ export function MultiSourcePanel({
     }
 
     if (configs.length > 0) {
-      onBatchGenerate(configs);
+      onBatchGenerate(configs, turnstileToken ?? undefined);
     }
   };
 
@@ -595,10 +597,15 @@ export function MultiSourcePanel({
           </div>
         )}
 
+        <TurnstileWidget
+          onSuccess={setTurnstileToken}
+          onExpire={() => setTurnstileToken(null)}
+        />
+
         <div className="flex gap-3 pt-2">
           <Button
             onClick={handleGenerate}
-            disabled={selectedSourceIds.size === 0}
+            disabled={selectedSourceIds.size === 0 || !turnstileReady}
             className="flex-1 rounded-xl"
           >
             Generate from {selectedSourceIds.size}{" "}

@@ -16,6 +16,10 @@ def verify_turnstile(token: str, remote_ip: str | None = None) -> bool:
     Returns False if verification fails.
     """
     if not settings.TURNSTILE_SECRET_KEY:
+        if settings.APP_ENV == "production":
+            # Fail closed in production — misconfigured Turnstile = no bot protection
+            logger.error("TURNSTILE_SECRET_KEY not set in production — rejecting request")
+            return False
         # Dev mode: pass through when no secret is configured
         return True
 

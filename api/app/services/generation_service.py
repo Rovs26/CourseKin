@@ -271,6 +271,7 @@ def _compute_cache_key(
     sections: list[str],
     counts: dict[str, int],
     prompt_version: str,
+    user_id: str | None,
 ) -> str:
     """Compute a stable SHA256 cache key for the generation inputs."""
     payload = json.dumps(
@@ -280,6 +281,7 @@ def _compute_cache_key(
             "sections": sorted(sections),
             "counts": {k: counts[k] for k in sorted(counts)},
             "prompt_version": prompt_version,
+            "user_id": user_id,
         },
         separators=(",", ":"),
         ensure_ascii=False,
@@ -317,10 +319,14 @@ def run_generation_in_background(
             sections=resolved_sections,
             counts=resolved_counts,
             prompt_version=PROMPT_VERSION,
+            user_id=user_id,
         )
         cached_entry = (
             db.query(GenerationCache)
-            .filter(GenerationCache.cache_key == cache_key)
+            .filter(
+                GenerationCache.cache_key == cache_key,
+                GenerationCache.user_id == user_id,
+            )
             .first()
         )
 
@@ -345,6 +351,9 @@ def run_generation_in_background(
                 job.error_message = str(e)
                 job.updated_at = utc_now_iso()
                 db.commit()
+                if user_id:
+                    from app.services.usage_service import release_reserved_cost
+                    release_reserved_cost(db, user_id, job_id)
                 return
 
             # Store result in cache
@@ -352,6 +361,7 @@ def run_generation_in_background(
                 from uuid import uuid4
                 cache_row = GenerationCache(
                     id=str(uuid4()),
+                    user_id=user_id,
                     cache_key=cache_key,
                     content_json=content_json,
                     model=settings.OPENAI_MODEL,
@@ -367,7 +377,6 @@ def run_generation_in_background(
                 logger.warning("Cache write failed: job=%s error=%s", job_id, e)
                 db.rollback()
 
-        # Record usage (cost=0 and cached=True on cache hit)
         if user_id:
             try:
                 from app.services.usage_service import record_usage  # avoid circular import
@@ -441,37 +450,10 @@ def run_generation_in_background(
                 job.error_message = f"Unexpected error: {str(e)}"
                 job.updated_at = utc_now_iso()
                 db.commit()
+                if user_id:
+                    from app.services.usage_service import release_reserved_cost
+                    release_reserved_cost(db, user_id, job_id)
         except Exception:
             pass
     finally:
         db.close()
-
-
-def run_batch_generation_in_background(
-    batch_id: str,
-    project_id: str,
-    source_configs: list[dict],
-):
-    """Run multiple source generations sequentially, each appending to the reviewer.
-
-    source_configs: list of {
-        "job_id": str,
-        "source_id": str,
-        "source_text": str,
-        "user_id": str | None,
-        "sections": list[str] | None,
-        "counts": dict | None,
-        "merge_mode": str,
-    }
-    """
-    for config in source_configs:
-        run_generation_in_background(
-            job_id=config["job_id"],
-            project_id=project_id,
-            source_id=config["source_id"],
-            source_text=config["source_text"],
-            user_id=config.get("user_id"),
-            sections=config["sections"],
-            counts=config["counts"],
-            merge_mode=config["merge_mode"],
-        )

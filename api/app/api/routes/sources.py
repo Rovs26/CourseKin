@@ -1,6 +1,7 @@
 import logging
 import tempfile
 from pathlib import Path
+from urllib.parse import urljoin
 from uuid import uuid4
 
 import requests as http_requests
@@ -38,6 +39,7 @@ MAX_PDF_BYTES = 25 * 1024 * 1024   # 25 MB — matches R2 presign cap
 MAX_TEXT_SIZE = 500 * 1024          # 500 KB
 MAX_URL_RESPONSE_SIZE = 5 * 1024 * 1024  # 5 MB
 MAX_TEXT_CHARS = 50_000
+MAX_REDIRECTS = 5
 
 
 def _source_to_dict(source: Source):
@@ -50,6 +52,29 @@ def _source_to_dict(source: Source):
         "created_at": source.created_at,
         "updated_at": source.updated_at,
     }
+
+
+def _fetch_public_url(url: str):
+    """Fetch a public page while validating every redirect destination."""
+    current_url = url
+    for _ in range(MAX_REDIRECTS + 1):
+        validate_url_safe(current_url)
+        resp = http_requests.get(
+            current_url,
+            timeout=15,
+            headers={"User-Agent": "ReviewFlow/1.0"},
+            stream=True,
+            allow_redirects=False,
+        )
+        if resp.is_redirect or resp.is_permanent_redirect:
+            location = resp.headers.get("Location")
+            resp.close()
+            if not location:
+                raise HTTPException(status_code=400, detail="URL redirect is missing a destination")
+            current_url = urljoin(current_url, location)
+            continue
+        return resp
+    raise HTTPException(status_code=400, detail="URL redirects too many times")
 
 
 # ── Text source ───────────────────────────────────────────────────────────────
@@ -105,16 +130,8 @@ def create_url_source(
 
     url_str = str(payload.url)
 
-    # SSRF protection: block internal/private IPs
-    validate_url_safe(url_str)
-
     try:
-        resp = http_requests.get(
-            url_str,
-            timeout=15,
-            headers={"User-Agent": "Mozilla/5.0"},
-            stream=True,
-        )
+        resp = _fetch_public_url(url_str)
         resp.raise_for_status()
 
         content_length = int(resp.headers.get("Content-Length", 0))
@@ -139,7 +156,8 @@ def create_url_source(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {str(e)}")
+        logger.warning("URL fetch failed for %s: %s", url_str, e)
+        raise HTTPException(status_code=400, detail="Failed to fetch or parse the URL. Check that it is publicly accessible.")
 
     if not extracted_text.strip():
         raise HTTPException(status_code=400, detail="No readable text found at that URL")
@@ -186,6 +204,7 @@ def presign_upload(
         user_id=current_user.user_id,
         filename=payload.filename,
         content_type=payload.content_type,
+        size_bytes=payload.size_bytes,
     )
 
 
@@ -200,7 +219,7 @@ def finalize_upload(
     """Step 3 of 3 — after the client has PUT to R2, register the source.
 
     Downloads the object from R2, extracts PDF text, creates the Source row.
-    The storage_key is validated to start with uploads/<user_id>/ to prevent
+    The storage_key is validated to start with temp/<user_id>/ to prevent
     cross-user key injection.
     """
     project = db.get(Project, payload.project_id)
@@ -210,49 +229,41 @@ def finalize_upload(
 
     # Security: verify the key is scoped to this user — prevents one user from
     # finalizing another user's upload key.
-    expected_prefix = f"uploads/{current_user.user_id}/"
+    expected_prefix = f"temp/{current_user.user_id}/"
     if not payload.storage_key.startswith(expected_prefix):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Download bytes from R2
-    pdf_bytes = storage_service.download_to_bytes(payload.storage_key)
-
-    # Size guard (belt-and-suspenders; R2 ContentLength constraint on presign does this too)
-    if len(pdf_bytes) > MAX_PDF_BYTES:
-        storage_service.delete_object(payload.storage_key)
-        raise HTTPException(status_code=400, detail="PDF is too large (max 25 MB)")
-
-    # MIME check — reject disguised non-PDFs before any parsing
-    validate_pdf_bytes(pdf_bytes)
-
-    # Page count check — reject before paying extraction cost
-    validate_pdf_structure(pdf_bytes)
-
-    # Extract text via temp file (extract_pdf_text works on file paths)
     extracted_text = ""
     try:
+        # Inspect length before downloading; the read is also bounded.
+        pdf_bytes = storage_service.download_to_bytes(payload.storage_key, MAX_PDF_BYTES)
+        validate_pdf_bytes(pdf_bytes)
+        validate_pdf_structure(pdf_bytes)
+
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp.write(pdf_bytes)
             tmp_path = tmp.name
 
         extracted_text = extract_pdf_text(tmp_path)
+        validate_extracted_text(extracted_text)
     except HTTPException:
+        storage_service.delete_object(payload.storage_key)
         raise
     except Exception as e:
+        storage_service.delete_object(payload.storage_key)
         raise HTTPException(status_code=400, detail=f"PDF text extraction failed: {str(e)}")
     finally:
         try:
-            Path(tmp_path).unlink(missing_ok=True)
+            if "tmp_path" in locals():
+                Path(tmp_path).unlink(missing_ok=True)
         except Exception:
             pass
-
-    # Reject PDFs that yielded too little text to be useful
-    validate_extracted_text(extracted_text)
 
     # Truncate to MAX_TEXT_CHARS — matches the OpenAI generation limit
     if len(extracted_text) > MAX_TEXT_CHARS:
         extracted_text = extracted_text[:MAX_TEXT_CHARS]
 
+    final_storage_key = storage_service.promote_temp_object(payload.storage_key, current_user.user_id)
     now = utc_now_iso()
     source = Source(
         id=str(uuid4()),
@@ -260,7 +271,7 @@ def finalize_upload(
         title=payload.title,
         type="pdf",
         status="processed",
-        storage_key=payload.storage_key,
+        storage_key=final_storage_key,
         text=extracted_text,
         created_at=now,
         updated_at=now,
@@ -274,7 +285,9 @@ def finalize_upload(
 # ── List / get / delete ───────────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/sources", response_model=SourceListResponse)
+@limiter.limit("120/hour")
 def list_project_sources(
+    request: Request,
     project_id: str,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -289,7 +302,9 @@ def list_project_sources(
 
 
 @router.get("/sources/item/{source_id}", response_model=SourceResponse)
+@limiter.limit("120/hour")
 def get_source(
+    request: Request,
     source_id: str,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -305,7 +320,9 @@ def get_source(
 
 
 @router.delete("/sources/{source_id}")
+@limiter.limit("30/hour")
 def delete_source(
+    request: Request,
     source_id: str,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -319,7 +336,7 @@ def delete_source(
 
     # Clean up R2 object if present
     if source.storage_key:
-        storage_service.delete_object(source.storage_key)
+        storage_service.delete_object(source.storage_key, strict=True)
 
     # Clean up legacy local file if present (pre-R2 rows)
     if source.file_path:

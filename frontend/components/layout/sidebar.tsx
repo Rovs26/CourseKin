@@ -8,6 +8,8 @@ import {
   FolderKanban,
   Files,
   Settings,
+  UserCog,
+  CreditCard,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +20,8 @@ const items = [
   { label: "My Projects", href: routes.projects, icon: FolderKanban },
   { label: "Templates", href: routes.templates, icon: Files },
   { label: "Settings", href: routes.settings, icon: Settings },
+  { label: "Billing", href: routes.billing, icon: CreditCard },
+  { label: "Account", href: routes.account, icon: UserCog },
 ];
 
 export function Sidebar() {

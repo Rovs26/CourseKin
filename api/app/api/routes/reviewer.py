@@ -1,7 +1,7 @@
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -18,11 +18,13 @@ from app.schemas.reviewer import (
     BatchGenerateResponse,
     CustomPdfRequest,
 )
-from app.services.generation_service import (
-    run_generation_in_background,
-    run_batch_generation_in_background,
+from app.services.generation_guard_service import require_generation_challenge
+from app.services.usage_service import (
+    check_daily_cap,
+    check_monthly_quota,
+    lock_quota_for_user,
+    reserve_usage,
 )
-from app.services.usage_service import check_monthly_quota
 from app.services.pdf_export_service import generate_reviewer_pdf
 from app.services.templates import get_template
 
@@ -240,7 +242,6 @@ def export_custom_pdf(
 def regenerate_reviewer(
     request: Request,
     payload: ReviewerRegenerateRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
@@ -258,6 +259,9 @@ def regenerate_reviewer(
             detail="Selected source has no usable extracted text yet"
         )
 
+    require_generation_challenge(request, payload.turnstile_token, current_user.user_id, db)
+    lock_quota_for_user(current_user.user_id, db)
+    check_daily_cap(user_id=current_user.user_id, db=db)
     check_monthly_quota(user_id=current_user.user_id, db=db)
 
     now = utc_now_iso()
@@ -267,42 +271,36 @@ def regenerate_reviewer(
         existing_reviewer.status = "stale"
         existing_reviewer.updated_at = now
 
-    job = Job(
-        id=str(uuid4()),
-        project_id=payload.project_id,
-        source_id=source.id,
-        job_type="regenerate-reviewer",
-        status="processing",
-        stage="generating",
-        created_at=now,
-        updated_at=now,
-        error_message=None,
-    )
-
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-
     sections = payload.sections
     counts = payload.counts.model_dump(exclude_none=True) if payload.counts else None
-
     if sections is None and counts is None and project.template_id:
         template = get_template(project.template_id)
         if template:
             sections = template.sections
             counts = dict(template.counts)
 
-    background_tasks.add_task(
-        run_generation_in_background,
-        job_id=job.id,
-        project_id=job.project_id,
-        source_id=job.source_id,
-        source_text=source_text,
+    job = Job(
+        id=str(uuid4()),
+        project_id=payload.project_id,
+        source_id=source.id,
         user_id=current_user.user_id,
-        sections=sections,
-        counts=counts,
-        merge_mode=payload.merge_mode,
+        job_type="regenerate-reviewer",
+        status="queued",
+        stage="queued",
+        generation_options={
+            "sections": sections,
+            "counts": counts,
+            "merge_mode": payload.merge_mode,
+        },
+        created_at=now,
+        updated_at=now,
+        error_message=None,
     )
+
+    db.add(job)
+    reserve_usage(db, current_user.user_id, job.id)
+    db.commit()
+    db.refresh(job)
 
     return _job_to_dict(job)
 
@@ -312,7 +310,6 @@ def regenerate_reviewer(
 def batch_generate_reviewer(
     request: Request,
     payload: BatchGenerateRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
@@ -326,7 +323,18 @@ def batch_generate_reviewer(
     if not payload.sources:
         raise HTTPException(status_code=400, detail="At least one source config is required")
 
-    check_monthly_quota(user_id=current_user.user_id, db=db)
+    # Cap batch size — prevents 1 request from triggering N unbounded AI calls
+    MAX_BATCH_SOURCES = 5
+    if len(payload.sources) > MAX_BATCH_SOURCES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Batch is limited to {MAX_BATCH_SOURCES} sources per request",
+        )
+
+    require_generation_challenge(request, payload.turnstile_token, current_user.user_id, db)
+    lock_quota_for_user(current_user.user_id, db)
+    check_daily_cap(user_id=current_user.user_id, db=db, requested_generations=len(payload.sources))
+    check_monthly_quota(user_id=current_user.user_id, db=db, requested_generations=len(payload.sources))
 
     now = utc_now_iso()
     batch_id = str(uuid4())
@@ -338,7 +346,6 @@ def batch_generate_reviewer(
         existing_reviewer.updated_at = now
 
     # Create a job for each source and validate
-    source_configs = []
     job_ids = []
 
     for sc in payload.sources:
@@ -359,16 +366,14 @@ def batch_generate_reviewer(
             id=str(uuid4()),
             project_id=payload.project_id,
             source_id=source.id,
+            user_id=current_user.user_id,
             job_type="batch-generate",
-            status="processing",
+            status="queued",
             stage="queued",
             created_at=now,
             updated_at=now,
             error_message=None,
         )
-        db.add(job)
-        job_ids.append(job.id)
-
         counts_dict = sc.counts.model_dump(exclude_none=True) if sc.counts else None
 
         # Fall back to template defaults
@@ -379,24 +384,16 @@ def batch_generate_reviewer(
                 sections = template.sections
                 counts_dict = dict(template.counts)
 
-        source_configs.append({
-            "job_id": job.id,
-            "source_id": source.id,
-            "source_text": source_text,
-            "user_id": current_user.user_id,
+        job.generation_options = {
             "sections": sections,
             "counts": counts_dict,
             "merge_mode": sc.merge_mode,
-        })
+        }
+        db.add(job)
+        reserve_usage(db, current_user.user_id, job.id)
+        job_ids.append(job.id)
 
     db.commit()
-
-    background_tasks.add_task(
-        run_batch_generation_in_background,
-        batch_id=batch_id,
-        project_id=payload.project_id,
-        source_configs=source_configs,
-    )
 
     return BatchGenerateResponse(
         batch_id=batch_id,

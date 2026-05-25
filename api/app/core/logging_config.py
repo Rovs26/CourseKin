@@ -4,10 +4,14 @@ In development: human-readable colored logs.
 In production:  JSON-formatted logs for log aggregators.
 """
 
-import logging
 import json
+import logging
+import logging.handlers
+import queue
 import sys
 from datetime import datetime, timezone
+
+import httpx
 
 from app.core.config import settings
 
@@ -25,6 +29,32 @@ class JSONFormatter(logging.Formatter):
         if record.exc_info and record.exc_info[0] is not None:
             log_entry["exception"] = self.formatException(record.exc_info)
         return json.dumps(log_entry)
+
+
+class AxiomHandler(logging.Handler):
+    """Ships JSON log records to Axiom via HTTP. Blocking — wrap in QueueHandler."""
+
+    def __init__(self, token: str, dataset: str) -> None:
+        super().__init__()
+        self.url = f"https://api.axiom.co/v1/datasets/{dataset}/ingest"
+        self.headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        self._client = httpx.Client(timeout=5)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            payload = [{
+                "_time": int(record.created * 1000),  # ms epoch
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+                "module": record.module,
+            }]
+            self._client.post(self.url, headers=self.headers, json=payload)
+        except Exception:
+            pass  # never let logging errors crash the app
 
 
 def setup_logging() -> None:
@@ -52,6 +82,18 @@ def setup_logging() -> None:
         )
 
     root.addHandler(handler)
+
+    # Ship logs to Axiom in production via a non-blocking background queue
+    if is_prod and settings.AXIOM_TOKEN:
+        axiom_handler = AxiomHandler(settings.AXIOM_TOKEN, settings.AXIOM_DATASET)
+        axiom_handler.setLevel(logging.INFO)
+        log_queue: queue.Queue = queue.Queue(maxsize=1000)
+        queue_handler = logging.handlers.QueueHandler(log_queue)
+        listener = logging.handlers.QueueListener(
+            log_queue, axiom_handler, respect_handler_level=True
+        )
+        listener.start()
+        root.addHandler(queue_handler)
 
     # Quieten noisy libraries
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)

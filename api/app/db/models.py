@@ -43,9 +43,12 @@ class Job(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     project_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     source_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     job_type: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
     stage: Mapped[str] = mapped_column(String, nullable=False)
+    generation_options: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
@@ -87,11 +90,26 @@ class BannedUser(Base):
     banned_by: Mapped[str] = mapped_column(String, nullable=False)  # admin email
 
 
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    # Primary key is our Clerk user_id — one active subscription row per user.
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    polar_customer_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    polar_subscription_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    plan: Mapped[str] = mapped_column(String, nullable=False)   # "plus_monthly" / "plus_yearly"
+    status: Mapped[str] = mapped_column(String, nullable=False)  # "active", "canceled", "past_due"
+    current_period_end: Mapped[str] = mapped_column(String, nullable=False)  # ISO UTC string
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class GenerationCache(Base):
     __tablename__ = "generation_cache"
     __table_args__ = (UniqueConstraint("cache_key", name="uq_generation_cache_key"),)
 
     id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     cache_key: Mapped[str] = mapped_column(String, nullable=False, index=True)
     content_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     model: Mapped[str] = mapped_column(String, nullable=False)
@@ -99,3 +117,12 @@ class GenerationCache(Base):
     hit_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[str] = mapped_column(String, nullable=False, index=True)
     last_hit_at: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class WebhookEvent(Base):
+    __tablename__ = "webhook_events"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    provider: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String, nullable=False)
+    processed_at: Mapped[str] = mapped_column(String, nullable=False)

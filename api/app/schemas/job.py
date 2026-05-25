@@ -14,6 +14,13 @@ class SectionCounts(BaseModel):
     quiz: Optional[int] = None
     flashcards: Optional[int] = None
 
+    @field_validator("key_points", "definitions", "qa", "quiz", "flashcards")
+    @classmethod
+    def validate_count(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not 1 <= v <= 50:
+            raise ValueError("Section count must be between 1 and 50")
+        return v
+
 
 class JobGenerateRequest(BaseModel):
     project_id: str
@@ -23,6 +30,13 @@ class JobGenerateRequest(BaseModel):
     counts: Optional[SectionCounts] = None
     merge_mode: MergeMode = "skip"  # skip=additive, replace=overwrite, append=concat lists
     turnstile_token: Optional[str] = None  # Required for first 3 generations per user
+
+    @field_validator("sections")
+    @classmethod
+    def validate_sections(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        if v is not None and any(section not in VALID_SECTIONS for section in v):
+            raise ValueError("Unknown reviewer section")
+        return v
 
 
 class JobResponse(BaseModel):

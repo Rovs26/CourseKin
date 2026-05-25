@@ -1,21 +1,36 @@
 import logging
 import time
 
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.core.rate_limit import limiter
-from app.api.routes import health, projects, sources, jobs, reviewer, templates, admin
+from app.api.routes import health, projects, sources, jobs, reviewer, templates, admin, users, billing
 from app.db.database import Base, engine
 from app.db import models  # noqa: F401 — imported so SQLAlchemy registers all tables
 
 # ── Logging ──────────────────────────────────────────────────────────
 setup_logging()
 logger = logging.getLogger("reviewflow")
+settings.validate_production()
+
+# ── Sentry ───────────────────────────────────────────────────────────
+if settings.SENTRY_DSN_API and settings.APP_ENV == "production":
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN_API,
+        integrations=[StarletteIntegration(), FastApiIntegration()],
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.0,
+        environment=settings.APP_ENV,
+        send_default_pii=False,
+    )
 
 # ── App ──────────────────────────────────────────────────────────────
 app = FastAPI(title=settings.APP_NAME)
@@ -93,5 +108,7 @@ app.include_router(jobs.router)
 app.include_router(reviewer.router)
 app.include_router(templates.router)
 app.include_router(admin.router)
+app.include_router(users.router)
+app.include_router(billing.router)
 
 logger.info("ReviewFlow API started (env=%s)", settings.APP_ENV)

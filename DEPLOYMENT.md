@@ -2,15 +2,132 @@
 
 ## Environments
 - Production: api.reviewflow.app (Railway) + reviewflow.app (Vercel)
-- Staging: (using Vercel preview deployments against Neon branches — no dedicated staging env)
-- Local dev: docker-compose in docker/docker-compose.yml
+- Staging: (Vercel preview deployments against Neon dev branch — no dedicated staging env)
+- Local dev: docker-compose in `docker/docker-compose.yml`
+
+---
 
 ## Environment variables
+
 ### API (Railway)
-(to be filled in Phase 10)
+
+Paste the following into Railway → your service → Variables. Every variable must be set before the first deploy.
+In `APP_ENV=production`, the API and worker intentionally refuse to boot with SQLite or without authentication, R2, Turnstile, and shared rate-limit configuration.
+
+```
+# Core
+APP_NAME=ReviewFlow API
+APP_ENV=production
+DATABASE_URL=postgresql://...         # Neon connection string (pooled)
+FRONTEND_URL=https://reviewflow.app
+
+# OpenAI
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4.1-nano
+OPENAI_MAX_OUTPUT_TOKENS=1500
+OPENAI_TIMEOUT_SECONDS=60
+
+# Clerk
+CLERK_JWKS_URL=https://<your-clerk-instance>.clerk.accounts.dev/.well-known/jwks.json
+CLERK_SECRET_KEY=sk_live_...
+CLERK_ISSUER=https://<your-clerk-instance>.clerk.accounts.dev
+
+# Cost controls / quotas
+FREE_TIER_MONTHLY_USD=0.25
+PAID_TIER_MONTHLY_USD=5.00
+MAX_EXTRACTED_CHARS=50000
+
+# Durable generation jobs and distributed rate limiting
+RATE_LIMIT_STORAGE_URI=redis://<railway-redis-host>:6379/0
+JOB_POLL_SECONDS=1
+JOB_STALE_SECONDS=300
+JOB_MAX_ATTEMPTS=3
+
+# Cloudflare Turnstile
+TURNSTILE_SECRET_KEY=...
+
+# Admin
+ADMIN_EMAILS=your@email.com
+
+# Observability
+SENTRY_DSN_API=https://...@sentry.io/...
+AXIOM_TOKEN=xaat-...
+AXIOM_DATASET=reviewflow-prod
+RESEND_API_KEY=re_...
+
+# Polar payments (enable only after live acceptance tests)
+BILLING_ENABLED=false
+POLAR_ACCESS_TOKEN=pat_...          # Polar dashboard → Settings → Developers → Personal Access Token
+POLAR_WEBHOOK_SECRET=whsec_...      # Polar dashboard → Webhooks → endpoint → Signing Secret
+POLAR_PLUS_MONTHLY_PRODUCT_ID=     # Product ID from the Plus Monthly product
+POLAR_PLUS_YEARLY_PRODUCT_ID=      # Product ID from the Plus Yearly product
+
+# Cloudflare R2 (uploads bucket)
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET_NAME=reviewflow-uploads
+R2_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+R2_PRESIGN_EXPIRY_SECONDS=300
+```
+
+### Generation worker service (Railway — separate service, same project)
+
+Create a second service from the same repository with root directory `api/` and configuration file path `api/railway.worker.toml`. Reference the API variables above, including `DATABASE_URL` and `RATE_LIMIT_STORAGE_URI`. Its start command is:
+
+```bash
+python -m scripts.job_worker
+```
+
+The API only enqueues generation work. At least one running worker is required for queued jobs to complete.
+
+### Daily digest cron service (Railway — separate service, same project)
+
+Reference all variables from the main API service using Railway's "reference variable" feature, plus:
+
+```
+# No extra vars needed — the cron script reads DATABASE_URL, RESEND_API_KEY,
+# ADMIN_EMAILS, and AXIOM_TOKEN from shared env.
+# Set the Railway service start command to:
+#   python -m scripts.daily_digest
+# Set the cron schedule to:
+#   0 9 * * *   (09:00 UTC = 17:00 Manila)
+```
+
+### Backup cron service (Railway — separate service, same project)
+
+```
+# References DATABASE_URL from main service.
+# Also needs R2 credentials for the backups bucket:
+R2_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+AWS_ACCESS_KEY_ID=...         # R2 key scoped to reviewflow-backups bucket only
+AWS_SECRET_ACCESS_KEY=...
+# Start command:
+#   bash scripts/backup-db.sh
+# Cron schedule:
+#   0 2 * * *   (02:00 UTC daily)
+```
 
 ### Frontend (Vercel)
-(to be filled in Phase 10)
+
+Use Node.js 20.19 or newer. Paste the following into Vercel → your project → Settings → Environment Variables. Set for Production (and optionally Preview).
+
+```
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+NEXT_PUBLIC_REVIEWFLOW_API_URL=https://api.reviewflow.app
+NEXT_PUBLIC_BILLING_ENABLED=false
+NEXT_PUBLIC_APP_ENV=production
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
+
+# Sentry (optional — skip until Sentry is wired up in Phase 8)
+NEXT_PUBLIC_SENTRY_DSN=https://...@sentry.io/...
+SENTRY_AUTH_TOKEN=sntrys_...
+SENTRY_ORG=your-sentry-org
+```
+
+Switch both `BILLING_ENABLED` and `NEXT_PUBLIC_BILLING_ENABLED` to `true` only after the Polar acceptance tests in the launch checklist pass.
+
+---
 
 ## Database migrations
 
@@ -24,13 +141,15 @@ We use Alembic for all schema changes. SQLite is used locally; Neon Postgres is 
 5. Commit the migration file alongside the model change
 
 ### To deploy a migration to production
-Migrations run automatically on Railway via the start command:
+Set the API service root directory to `api/`; its Docker image runs migrations before starting the HTTP server:
 ```
 alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
+If the migration fails, Railway will not start the new container and the previous version continues serving traffic — zero downtime for failed migrations.
 
 ### To roll back
-```
+```bash
+# SSH into Railway via railway run, or use a one-off job:
 alembic downgrade -1
 ```
 
@@ -44,11 +163,57 @@ Preview deploys use the `dev` branch. To test a destructive migration safely:
 3. Run `alembic upgrade head` and verify
 4. If good, apply to `main` by running the migration in the Railway deploy
 
+---
+
 ## Release workflow
-(to be filled in Phase 10)
+
+1. **Feature branch** — work on `feat/...` or `fix/...` branched off `master`.
+2. **Open PR to `master`** — GitHub Actions runs CI (API tests/migrations plus frontend lint/build).
+3. **Preview deploy** — Vercel automatically deploys a preview for the PR, pointing at the Neon `dev` branch.
+4. **Review** — test the preview URL, smoke-test the happy path.
+5. **Merge to `master`** — Vercel auto-deploys frontend to production. Railway auto-deploys API to production.
+6. **Migrations** — Railway's CMD runs `alembic upgrade head` before starting uvicorn. If a migration fails, the deploy fails and Railway keeps the previous version serving traffic.
+
+---
 
 ## Backup and restore
-(to be filled in Phase 10)
+
+### Daily backup
+`scripts/backup-db.sh` runs as a Railway cron service (02:00 UTC daily).
+It does `pg_dump | gzip` and uploads to the `reviewflow-backups` R2 bucket.
+Lifecycle rule: delete objects older than 30 days (set in Cloudflare R2 bucket settings).
+
+### To restore from backup
+```bash
+# 1. Download the backup
+aws s3 cp s3://reviewflow-backups/20260425-020000.sql.gz /tmp/restore.sql.gz \
+  --endpoint-url "$R2_ENDPOINT_URL"
+
+# 2. Decompress
+gunzip /tmp/restore.sql.gz
+
+# 3. Restore (this DROPS the existing DB — do this on a Neon branch first)
+psql "$DATABASE_URL" < /tmp/restore.sql
+```
+
+Always restore to a Neon branch, verify data, then promote if correct.
+
+### Secret rotation procedures
+
+| Secret | How to rotate |
+|--------|--------------|
+| `OPENAI_API_KEY` | Create new key in OpenAI dashboard → update Railway var → delete old key |
+| `CLERK_SECRET_KEY` | Clerk dashboard → API Keys → rotate → update Railway var |
+| `CLERK_JWKS_URL` | Changes only if Clerk instance domain changes — update both Railway and Vercel |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Cloudflare → R2 → Manage R2 API Tokens → create new → update Railway var → delete old |
+| `TURNSTILE_SECRET_KEY` | Cloudflare → Turnstile → Widget → Rotate Secret Key → update Railway var |
+| `SENTRY_DSN_API` | Sentry → Settings → Client Keys → Revoke + Add → update Railway var |
+| `AXIOM_TOKEN` | Axiom → Settings → API Tokens → delete + create → update Railway var |
+| `RESEND_API_KEY` | Resend → API Keys → create new → update Railway var → delete old |
+| `SENTRY_AUTH_TOKEN` | Sentry → Settings → Auth Tokens → create new → update Vercel var → delete old |
+| `POLAR_ACCESS_TOKEN` | Polar → Settings → Developers → rotate → update Railway var → revoke old |
+
+---
 
 ## Incident response
 
@@ -58,15 +223,58 @@ Preview deploys use the `dev` branch. To test a destructive migration safely:
 3. Check /admin/abuse for suspicious user activity.
 4. Check Axiom for unusual /jobs/generate request patterns.
 
+### Queued jobs stop completing
+1. Check the worker service is healthy and using the same `DATABASE_URL` as the API.
+2. Inspect worker logs for retry-limit failures or OpenAI/provider errors.
+3. Verify `RATE_LIMIT_STORAGE_URI` points to shared Redis for every API replica.
+
 ### API is down
 1. Check Railway deployment logs.
 2. Check Neon dashboard for database connectivity.
 3. Check Sentry for recent error spike.
 4. If deployment is broken, `git revert` the latest commit and push.
 
+### Database is unreachable
+1. Check Neon dashboard status page.
+2. Check `DATABASE_URL` is correct in Railway vars (no extra whitespace).
+3. Check Neon connection limit — the app uses connection pooling via SQLAlchemy but Neon free tier has a low limit.
+4. If Neon is degraded, revert to the last backup on a new Neon branch and point `DATABASE_URL` at it.
+
+---
+
+## Axiom alert rules
+
+Configure these in Axiom → Monitors after first logs arrive in production.
+
+### 1. Error rate >5/min
+**Query (APL):**
+```
+['reviewflow-prod']
+| where level == "ERROR"
+| summarize count() by bin(_time, 1m)
+| where count_ > 5
+```
+**Threshold:** count > 5 over a 1-minute window
+**Action:** email admin
+
+### 2. Failed jobs ratio >20% over 1 hour
+**Query (APL):**
+```
+['reviewflow-prod']
+| where logger contains "generation_service" and message contains "failed"
+| summarize count() by bin(_time, 1h)
+```
+**Threshold:** count > 20% of total generation attempts over 1 hour
+**Action:** email admin
+
+### 3. OpenAI spend spike
+Rely on the daily digest email for now (MVP). Revisit if spend exceeds $1/day.
+
+---
+
 ## Monitoring dashboards
-- Sentry API: (URL to be added in Phase 8)
-- Sentry Web: (URL)
-- Axiom logs: (URL)
+- Sentry API: (add project URL after Phase 8 deploy)
+- Sentry Web: (add project URL after Phase 8 deploy)
+- Axiom logs: (add dataset URL after Phase 8 deploy)
 - Railway project: (URL)
 - Neon project: (URL)

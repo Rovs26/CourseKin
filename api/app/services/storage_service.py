@@ -13,6 +13,7 @@ from functools import lru_cache
 from uuid import uuid4
 
 from botocore.config import Config
+from botocore.exceptions import ClientError
 from fastapi import HTTPException
 
 from app.core.config import settings
@@ -51,7 +52,7 @@ def _get_client():
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def generate_presigned_put(user_id: str, filename: str, content_type: str) -> dict:
+def generate_presigned_put(user_id: str, filename: str, content_type: str, size_bytes: int) -> dict:
     """Generate a presigned PUT URL for direct browser→R2 upload.
 
     Returns {"upload_url": str, "key": str, "expires_in": int}.
@@ -68,7 +69,12 @@ def generate_presigned_put(user_id: str, filename: str, content_type: str) -> di
     if not safe_name:
         safe_name = "upload.pdf"
 
-    key = f"uploads/{user_id}/{uuid4()}/{safe_name}"
+    if size_bytes <= 0 or size_bytes > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="PDF is too large (max 25 MB)")
+
+    # Objects remain temporary until server-side validation completes.
+    # A lifecycle policy can safely remove abandoned temp/ uploads.
+    key = f"temp/{user_id}/{uuid4()}/{safe_name}"
 
     try:
         upload_url = client.generate_presigned_url(
@@ -77,6 +83,7 @@ def generate_presigned_put(user_id: str, filename: str, content_type: str) -> di
                 "Bucket": settings.R2_BUCKET_NAME,
                 "Key": key,
                 "ContentType": content_type,
+                "ContentLength": size_bytes,
             },
             ExpiresIn=settings.R2_PRESIGN_EXPIRY_SECONDS,
         )
@@ -105,7 +112,20 @@ def generate_presigned_get(key: str, expires_in: int = 3600) -> str:
         raise HTTPException(status_code=500, detail="Failed to generate download URL")
 
 
-def download_to_bytes(key: str) -> bytes:
+def get_object_size(key: str) -> int:
+    """Return object size without downloading its body."""
+    client = _get_client()
+    try:
+        response = client.head_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
+        return int(response.get("ContentLength", 0))
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+            raise HTTPException(status_code=404, detail="Uploaded file not found in storage")
+        logger.error("Failed to inspect object %s in R2: %s", key, exc)
+        raise HTTPException(status_code=500, detail="Failed to inspect uploaded file")
+
+
+def download_to_bytes(key: str, max_bytes: int = MAX_UPLOAD_BYTES) -> bytes:
     """Download an R2 object and return its raw bytes.
 
     Used by the finalize endpoint to fetch the PDF for server-side text extraction.
@@ -113,16 +133,41 @@ def download_to_bytes(key: str) -> bytes:
     """
     client = _get_client()
     try:
+        size = get_object_size(key)
+        if size > max_bytes:
+            raise HTTPException(status_code=400, detail="PDF is too large (max 25 MB)")
         response = client.get_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
-        return response["Body"].read()
-    except client.exceptions.NoSuchKey:
-        raise HTTPException(status_code=404, detail="Uploaded file not found in storage")
+        body = response["Body"].read(max_bytes + 1)
+        if len(body) > max_bytes:
+            raise HTTPException(status_code=400, detail="PDF is too large (max 25 MB)")
+        return body
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Failed to download object %s from R2: %s", key, exc)
         raise HTTPException(status_code=500, detail="Failed to retrieve uploaded file")
 
 
-def delete_object(key: str) -> None:
+def promote_temp_object(temp_key: str, user_id: str) -> str:
+    """Copy a validated temp upload to its retained key and remove the temp object."""
+    client = _get_client()
+    if not temp_key.startswith(f"temp/{user_id}/"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    final_key = temp_key.replace("temp/", "uploads/", 1)
+    try:
+        client.copy_object(
+            Bucket=settings.R2_BUCKET_NAME,
+            CopySource={"Bucket": settings.R2_BUCKET_NAME, "Key": temp_key},
+            Key=final_key,
+        )
+        client.delete_object(Bucket=settings.R2_BUCKET_NAME, Key=temp_key)
+        return final_key
+    except Exception as exc:
+        logger.error("Failed to promote R2 object %s: %s", temp_key, exc)
+        raise HTTPException(status_code=500, detail="Failed to finalize uploaded file")
+
+
+def delete_object(key: str, *, strict: bool = False) -> None:
     """Delete an object from R2. Silently no-ops if the object doesn't exist."""
     if not settings.r2_configured:
         return  # No-op in local dev where R2 is not configured
@@ -131,5 +176,6 @@ def delete_object(key: str) -> None:
         client.delete_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
         logger.info("Deleted R2 object: %s", key)
     except Exception as exc:
-        # Log but don't raise — a failed delete shouldn't crash the caller
         logger.warning("Failed to delete R2 object %s: %s", key, exc)
+        if strict:
+            raise HTTPException(status_code=503, detail="Unable to delete stored file; please retry")

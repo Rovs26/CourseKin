@@ -30,7 +30,6 @@ import { useProject } from "@/hooks/use-project";
 import { useReviewer } from "@/hooks/use-reviewer";
 import { useSources } from "@/hooks/use-sources";
 import { getTemplateConfig } from "@/lib/templates";
-import type { Project } from "@/types/project";
 import type { Source } from "@/types/source";
 
 type GenerationMode = "full" | "section" | null;
@@ -221,6 +220,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
             counts: options.counts,
             merge_mode: options.merge_mode,
           }],
+          turnstile_token: options.turnstile_token,
         });
         const [firstId, ...rest] = result.job_ids;
         setBatchProgress({ done: 0, total: result.total_sources });
@@ -250,7 +250,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
   };
 
   // Multi-source batch generate
-  const handleBatchGenerate = async (configs: SourceGenerationConfig[]) => {
+  const handleBatchGenerate = async (configs: SourceGenerationConfig[], turnstileToken?: string) => {
     if (!canGenerate || isGenerating || configs.length === 0) return;
 
     setOptionsView(null);
@@ -262,6 +262,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
       const result = await batchGenerateReviewer({
         project_id: projectId,
         sources: configs,
+        turnstile_token: turnstileToken,
       });
 
       const [firstId, ...rest] = result.job_ids;

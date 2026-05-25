@@ -4,6 +4,8 @@ export const routes = {
   newProject: "/projects/new",
   templates: "/template",
   settings: "/settings",
+  account: "/settings/account",
+  billing: "/settings/billing",
   projectOverview: (projectId: string) => `/projects/${projectId}`,
   projectReviewer: (projectId: string) => `/projects/${projectId}/reviewer`,
   projectSources: (projectId: string) => `/projects/${projectId}/sources`,

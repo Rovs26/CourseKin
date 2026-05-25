@@ -46,6 +46,7 @@ class PresignUploadRequest(BaseModel):
     project_id: str
     filename: str
     content_type: str
+    size_bytes: int
 
     @field_validator("filename")
     @classmethod
@@ -62,6 +63,13 @@ class PresignUploadRequest(BaseModel):
     def validate_content_type(cls, v: str) -> str:
         if v != "application/pdf":
             raise ValueError("content_type must be 'application/pdf'")
+        return v
+
+    @field_validator("size_bytes")
+    @classmethod
+    def validate_size_bytes(cls, v: int) -> int:
+        if v <= 0 or v > 25 * 1024 * 1024:
+            raise ValueError("PDF size must be between 1 byte and 25 MB")
         return v
 
 

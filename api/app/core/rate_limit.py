@@ -16,6 +16,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.requests import Request
 
+from app.core.config import settings
 
 def user_or_ip_key(request: Request) -> str:
     auth = request.headers.get("Authorization", "")
@@ -32,4 +33,8 @@ def user_or_ip_key(request: Request) -> str:
     return f"ip:{get_remote_address(request)}"
 
 
-limiter = Limiter(key_func=user_or_ip_key, default_limits=["600/hour"])
+limiter = Limiter(
+    key_func=user_or_ip_key,
+    default_limits=["600/hour"],
+    storage_uri=settings.RATE_LIMIT_STORAGE_URI or "memory://",
+)

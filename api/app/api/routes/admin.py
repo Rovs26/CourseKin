@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser, get_current_user
@@ -80,9 +80,7 @@ def abuse_summary(
         db.query(
             Job.project_id,
             func.count(Job.id).label("total"),
-            func.sum(
-                func.case((Job.status == "failed", 1), else_=0)
-            ).label("failed"),
+            func.sum(case((Job.status == "failed", 1), else_=0)).label("failed"),
         )
         .filter(Job.created_at >= cutoff_24h)
         .group_by(Job.project_id)

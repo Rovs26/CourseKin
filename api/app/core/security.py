@@ -56,10 +56,9 @@ def validate_url_safe(url: str) -> None:
         except ValueError:
             continue
 
-        for blocked in _BLOCKED_RANGES:
-            if ip in blocked:
-                logger.warning("SSRF blocked: %s resolved to %s", url, ip_str)
-                raise HTTPException(
-                    status_code=400,
-                    detail="URLs pointing to internal or private networks are not allowed",
-                )
+        if not ip.is_global or any(ip in blocked for blocked in _BLOCKED_RANGES):
+            logger.warning("SSRF blocked: %s resolved to %s", url, ip_str)
+            raise HTTPException(
+                status_code=400,
+                detail="URLs pointing to internal or private networks are not allowed",
+            )

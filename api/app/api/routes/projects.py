@@ -9,6 +9,7 @@ from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
 from app.db.models import Project, Source, Job, Reviewer
+from app.services import storage_service
 from app.schemas.project import (
     ProjectCreate,
     ProjectUpdate,
@@ -64,7 +65,9 @@ def create_project(
 
 
 @router.get("", response_model=ProjectListResponse)
+@limiter.limit("120/hour")
 def list_projects(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
@@ -77,7 +80,9 @@ def list_projects(
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
+@limiter.limit("120/hour")
 def get_project(
+    request: Request,
     project_id: str,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -129,6 +134,8 @@ def delete_project(
     # Delete uploaded files for sources
     sources = db.query(Source).filter(Source.project_id == project_id).all()
     for source in sources:
+        if source.storage_key:
+            storage_service.delete_object(source.storage_key, strict=True)
         if source.file_path:
             path = Path(source.file_path)
             if path.exists():
