@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Privacy Policy — ReviewFlow",
+  title: "Privacy Policy — CourseKin",
 };
 
 export default function PrivacyPage() {
@@ -10,7 +10,7 @@ export default function PrivacyPage() {
       <nav className="border-b border-slate-200">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <Link href="/" className="text-lg font-semibold tracking-tight text-slate-900">
-            ReviewFlow
+            CourseKin
           </Link>
         </div>
       </nav>
@@ -22,7 +22,7 @@ export default function PrivacyPage() {
         <div className="mt-10 space-y-8 text-sm leading-7 text-slate-600">
           <section>
             <h2 className="text-lg font-semibold text-slate-900">1. What We Collect</h2>
-            <p className="mt-3">When you use ReviewFlow, we collect the following categories of information:</p>
+            <p className="mt-3">When you use CourseKin, we collect the following categories of information:</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>
                 <strong>Account information:</strong> Your name, email address, and Clerk user ID,
@@ -40,7 +40,7 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Payment information:</strong> If you subscribe to a paid plan, payments are
-                processed by Polar (our merchant of record). ReviewFlow never sees or stores your
+                processed by Polar (our merchant of record). CourseKin never sees or stores your
                 card number or full payment details.
               </li>
             </ul>
@@ -74,10 +74,10 @@ export default function PrivacyPage() {
                 legal, security, and feature-specific exceptions in OpenAI&apos;s current policy.
               </li>
               <li>
-                ReviewFlow does <strong>not</strong> use your content to train our own models.
+                CourseKin does <strong>not</strong> use your content to train our own models.
               </li>
               <li>
-                <strong>Generated output may contain errors.</strong> ReviewFlow is a study aid,
+                <strong>Generated output may contain errors.</strong> CourseKin is a study aid,
                 not a source of truth. Always verify important facts against your original source
                 material.
               </li>
@@ -87,7 +87,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900">4. Subprocessors</h2>
             <p className="mt-3">
-              We rely on the following third-party subprocessors to operate ReviewFlow. Each
+              We rely on the following third-party subprocessors to operate CourseKin. Each
               subprocessor is bound by a Data Processing Agreement (DPA) and applicable data
               protection law. Full details are on our{" "}
               <Link href="/legal/dpa" className="font-medium text-slate-900 underline">
@@ -137,7 +137,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900">6. International Transfers</h2>
             <p className="mt-3">
-              ReviewFlow is operated from the Philippines and uses subprocessors primarily based
+              CourseKin is operated from the Philippines and uses subprocessors primarily based
               in the United States. If you are located in the European Economic Area (EEA), United
               Kingdom, or Switzerland, your personal data may be transferred to countries that do
               not have the same data protection laws as your home country.
@@ -174,8 +174,8 @@ export default function PrivacyPage() {
             </ul>
             <p className="mt-3">
               To exercise any of these rights, email{" "}
-              <a href="mailto:privacy@reviewflow.app" className="font-medium text-slate-900 underline">
-                privacy@reviewflow.app
+              <a href="mailto:privacy@coursekin.app" className="font-medium text-slate-900 underline">
+                privacy@coursekin.app
               </a>{" "}
               or use the <strong>Export my data</strong> and <strong>Delete my account</strong>{" "}
               buttons in{" "}
@@ -189,13 +189,13 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900">8. Children</h2>
             <p className="mt-3">
-              ReviewFlow is not intended for users under the age of 16. We do not knowingly
+              CourseKin is not intended for users under the age of 16. We do not knowingly
               collect personal information from anyone under 16. If we become aware that a user
               is under 16, we will delete their account and associated data promptly. If you
               believe a child under 16 has provided us with personal information, please contact
               us at{" "}
-              <a href="mailto:privacy@reviewflow.app" className="font-medium text-slate-900 underline">
-                privacy@reviewflow.app
+              <a href="mailto:privacy@coursekin.app" className="font-medium text-slate-900 underline">
+                privacy@coursekin.app
               </a>
               .
             </p>
@@ -204,7 +204,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900">9. Cookies</h2>
             <p className="mt-3">
-              ReviewFlow uses only essential cookies required for authentication and session
+              CourseKin uses only essential cookies required for authentication and session
               management (set by Clerk) and for storing your cookie consent preference. We do
               not use advertising or analytics cookies. For users in the EU/EEA/UK, a cookie
               consent banner will appear on your first visit.
@@ -227,8 +227,8 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold text-slate-900">11. Contact</h2>
             <p className="mt-3">
               Questions about this privacy policy or your data? Contact us at{" "}
-              <a href="mailto:privacy@reviewflow.app" className="font-medium text-slate-900 underline">
-                privacy@reviewflow.app
+              <a href="mailto:privacy@coursekin.app" className="font-medium text-slate-900 underline">
+                privacy@coursekin.app
               </a>
               .
             </p>
@@ -238,7 +238,7 @@ export default function PrivacyPage() {
 
       <footer className="border-t border-slate-200">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-6">
-          <p className="text-sm text-slate-500">&copy; {new Date().getFullYear()} ReviewFlow</p>
+          <p className="text-sm text-slate-500">&copy; {new Date().getFullYear()} CourseKin</p>
           <div className="flex gap-4 text-sm text-slate-500">
             <Link href="/privacy" className="font-medium text-slate-900">Privacy</Link>
             <Link href="/terms" className="hover:text-slate-900">Terms</Link>

@@ -17,7 +17,7 @@ APP_VERSION = "0.1.0"
 
 @router.get("/")
 def root():
-    return {"message": "ReviewFlow API running"}
+    return {"message": "CourseKin API running"}
 
 
 @router.get("/health")

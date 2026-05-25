@@ -4,7 +4,7 @@ import { useState } from "react";
 import { EmptyState } from "@/components/states/empty-state";
 import { SourceUploadPanel } from "@/components/sources/source-upload-panel";
 import { SourceList } from "@/components/sources/source-list";
-import { createTextSource, presignAndUploadPDF, createURLSource } from "@/lib/reviewflow-api";
+import { createTextSource, presignAndUploadPDF, createURLSource } from "@/lib/coursekin-api";
 import { useProject } from "@/hooks/use-project";
 import { useSources } from "@/hooks/use-sources";
 

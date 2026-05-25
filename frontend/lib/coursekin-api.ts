@@ -3,6 +3,7 @@ import type { ReviewerOutput, ReviewerStatus } from "@/types/reviewer";
 import type { Source } from "@/types/source";
 
 const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_COURSEKIN_API_URL ??
   process.env.NEXT_PUBLIC_REVIEWFLOW_API_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.NEXT_PUBLIC_API_BASE_URL ??

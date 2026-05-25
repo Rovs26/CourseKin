@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 const API_BASE =
-  (process.env.NEXT_PUBLIC_REVIEWFLOW_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+  (process.env.NEXT_PUBLIC_COURSEKIN_API_URL ?? process.env.NEXT_PUBLIC_REVIEWFLOW_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 
 export default function AccountPage() {
   const { getToken } = useAuth();
@@ -37,7 +37,7 @@ export default function AccountPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "reviewflow-export.zip";
+      a.download = "coursekin-export.zip";
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {

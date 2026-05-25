@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import type { ProjectSummary } from "@/lib/reviewflow-api";
+import type { ProjectSummary } from "@/lib/coursekin-api";
 import { cn } from "@/lib/utils";
 
 const reviewerStatusStyles = {

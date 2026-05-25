@@ -1,4 +1,4 @@
-# ReviewFlow Production Migration — Progress Tracker
+# CourseKin Production Migration — Progress Tracker
 
 **Hardening in progress: May 25, 2026. This branch addresses turnover-review launch blockers before any production deploy.**
 
@@ -95,7 +95,7 @@ Neon test (step 7b) skipped this session — run manually once Neon dev branch e
 
 Commit SHA: 6aa8325
 Manual follow-ups:
-- In Cloudflare R2 dashboard → reviewflow-uploads bucket → Settings → Lifecycle rules:
+- In Cloudflare R2 dashboard → coursekin-uploads bucket → Settings → Lifecycle rules:
   1. Delete objects with prefix "temp/" after 7 days
   2. Delete incomplete multipart uploads after 1 day
 - Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT_URL in Railway env vars
@@ -188,18 +188,18 @@ Commit SHA:
 ### Manual deployment steps (do these in order)
 [ ] a) Railway: connect GitHub repo, select "Deploy from railway.toml", wait for first build
 [ ] b) Railway: add all API env vars from DEPLOYMENT.md (API section)
-[ ] c) Railway: add custom domain api.reviewflow.app; point CNAME in Cloudflare DNS to Railway hostname; start with gray cloud (DNS only) so Railway provisions TLS; once healthy flip to orange cloud (proxied)
+[ ] c) Railway: add custom domain api.coursekin.app; point CNAME in Cloudflare DNS to Railway hostname; start with gray cloud (DNS only) so Railway provisions TLS; once healthy flip to orange cloud (proxied)
 [ ] d) Vercel: connect repo, set root directory to frontend/, add all env vars from DEPLOYMENT.md (Frontend section)
-[ ] e) Vercel: add custom domain reviewflow.app; follow Vercel DNS instructions in Cloudflare
-[ ] f) Cloudflare: enable WAF Managed Rules on both api.reviewflow.app and reviewflow.app (free tier); enable Bot Fight Mode
-[ ] g) Hit https://api.reviewflow.app/health — verify response is {"status":"ok","version":"0.1.0","env":"production"}
-[ ] h) Hit https://reviewflow.app — verify marketing page renders
+[ ] e) Vercel: add custom domain coursekin.app; follow Vercel DNS instructions in Cloudflare
+[ ] f) Cloudflare: enable WAF Managed Rules on both api.coursekin.app and coursekin.app (free tier); enable Bot Fight Mode
+[ ] g) Hit https://api.coursekin.app/health — verify response is {"status":"ok","version":"0.1.0","env":"production"}
+[ ] h) Hit https://coursekin.app — verify marketing page renders
 [ ] i) Sign up as a test user end-to-end: upload a PDF, generate, verify Axiom gets logs, Neon has data, R2 has the file
 
 ### Railway cron services (set up after main API is healthy)
 [ ] Daily digest: new Railway service in same project with root directory `api/`, start command = `python -m scripts.daily_digest`, cron schedule = `0 9 * * *` (09:00 UTC = 17:00 Manila); reference all vars from main API service
-[ ] Daily backup: new Railway service, start command = `bash scripts/backup-db.sh`, cron schedule = `0 2 * * *`; set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY scoped to reviewflow-backups R2 bucket
-[ ] Create R2 bucket `reviewflow-backups` (separate from uploads); set lifecycle rule: delete objects older than 30 days
+[ ] Daily backup: new Railway service, start command = `bash scripts/backup-db.sh`, cron schedule = `0 2 * * *`; set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY scoped to coursekin-backups R2 bucket
+[ ] Create R2 bucket `coursekin-backups` (separate from uploads); set lifecycle rule: delete objects older than 30 days
 
 ## Phase 11 — Polar payments
 [x] Add Subscription model + Alembic migration (d4f2a8bc91e3)
@@ -221,7 +221,7 @@ Commit SHA:
 [ ] Create "Plus Monthly" product at $5.99 — note its Product ID from the dashboard
 [ ] Create "Plus Yearly" product at $39.99 — note its Product ID
 [ ] Set POLAR_ACCESS_TOKEN in Railway env vars (Settings → Developers → Personal Access Token)
-[ ] Add Polar webhook endpoint in Polar dashboard pointing to https://api.reviewflow.app/webhooks/polar; enable events: subscription.created, subscription.updated, subscription.canceled, subscription.revoked; copy the Signing Secret
+[ ] Add Polar webhook endpoint in Polar dashboard pointing to https://api.coursekin.app/webhooks/polar; enable events: subscription.created, subscription.updated, subscription.canceled, subscription.revoked; copy the Signing Secret
 [ ] Set POLAR_WEBHOOK_SECRET (whsec_...) in Railway env vars
 [ ] Set POLAR_PLUS_MONTHLY_PRODUCT_ID = <product ID from dashboard> in Railway env vars
 [ ] Set POLAR_PLUS_YEARLY_PRODUCT_ID = <product ID from dashboard> in Railway env vars
@@ -255,5 +255,12 @@ Commit SHA:
 [x] Enforce deployment safeguards for both `APP_ENV=staging` and `APP_ENV=production`
 [x] Add `/ready` database-connectivity verification separate from liveness health checks
 [x] Add a non-mutating staging smoke script with optional authenticated read verification
-[x] Verify the staging smoke command locally against temporary ReviewFlow API and frontend servers
+[x] Verify the staging smoke command locally against temporary CourseKin API and frontend servers
 [ ] Provision isolated staging services and run the staged smoke and provider acceptance workflows
+
+## Brand Transition - CourseKin
+[x] Record CourseKin as the working v2 product name in the roadmap
+[x] Update public UI, generated exports, API display text, and operational copy to CourseKin
+[x] Introduce `NEXT_PUBLIC_COURSEKIN_API_URL` while preserving legacy frontend variable fallback
+[ ] Acquire and verify the production domain and provision the `@coursekin.app` mailboxes before launch
+[ ] Complete formal trademark and handle clearance before public branding investment

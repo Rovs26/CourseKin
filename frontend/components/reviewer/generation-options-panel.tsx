@@ -10,7 +10,7 @@ import type {
   SectionCounts,
   MergeMode,
   SourceGenerationConfig,
-} from "@/lib/reviewflow-api";
+} from "@/lib/coursekin-api";
 import type { Source } from "@/types/source";
 
 type SectionConfig = {

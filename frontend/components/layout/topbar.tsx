@@ -16,7 +16,7 @@ export function Topbar() {
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
       <div className="flex h-14 items-center justify-between px-4 md:px-6 lg:px-8">
         <p className="text-sm font-medium text-slate-500">
-          ReviewFlow
+          CourseKin
         </p>
 
         <div className="flex items-center gap-2">

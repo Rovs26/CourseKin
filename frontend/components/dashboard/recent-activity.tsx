@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { ProjectSummary } from "@/lib/reviewflow-api";
+import type { ProjectSummary } from "@/lib/coursekin-api";
 
 function formatDate(iso?: string) {
   if (!iso) {

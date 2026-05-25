@@ -7,7 +7,7 @@ export default function LandingPage() {
     <main className="min-h-screen bg-white">
       <nav className="border-b border-slate-200">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <p className="text-lg font-semibold tracking-tight text-slate-900">ReviewFlow</p>
+          <p className="text-lg font-semibold tracking-tight text-slate-900">CourseKin</p>
           <div className="flex items-center gap-3">
             <Button asChild variant="ghost" size="sm">
               <Link href="/sign-in">Log in</Link>
@@ -25,7 +25,7 @@ export default function LandingPage() {
             Upload your notes.<br />Get a complete study reviewer.
           </h1>
           <p className="mt-6 text-lg leading-8 text-slate-600">
-            Paste text, upload a PDF, or add a URL. ReviewFlow generates summaries, key points, definitions, flashcards, and quizzes — ready to study or export as PDF.
+            Paste text, upload a PDF, or add a URL. CourseKin generates summaries, key points, definitions, flashcards, and quizzes — ready to study or export as PDF.
           </p>
           <div className="mt-8 flex gap-3">
             <Button asChild size="lg">
@@ -52,7 +52,7 @@ export default function LandingPage() {
           <div className="mt-6 grid gap-8 sm:grid-cols-3">
             {[
               { step: "1", title: "Add your source", desc: "Paste notes, upload a PDF, or enter a URL." },
-              { step: "2", title: "Generate reviewer", desc: "ReviewFlow creates 6 study sections from your content." },
+              { step: "2", title: "Generate reviewer", desc: "CourseKin creates 6 study sections from your content." },
               { step: "3", title: "Study or export", desc: "Review online, annotate, then download as PDF." },
             ].map((item) => (
               <div key={item.step}>
@@ -69,7 +69,7 @@ export default function LandingPage() {
 
       <footer className="border-t border-slate-200">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
-          <p className="text-sm text-slate-500">&copy; {new Date().getFullYear()} ReviewFlow</p>
+          <p className="text-sm text-slate-500">&copy; {new Date().getFullYear()} CourseKin</p>
           <div className="flex gap-4 text-sm text-slate-500">
             <Link href="/privacy" className="hover:text-slate-900">Privacy</Link>
             <Link href="/terms" className="hover:text-slate-900">Terms</Link>

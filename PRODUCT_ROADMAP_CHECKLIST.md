@@ -1,4 +1,4 @@
-# ReviewFlow Product Roadmap and SaaS Checklist
+# CourseKin Product Roadmap and SaaS Checklist
 
 **Created:** May 25, 2026
 
@@ -21,7 +21,7 @@ This document complements:
 
 ### North Star
 
-ReviewFlow should become a **source-grounded academic course companion**:
+CourseKin should become a **source-grounded academic course companion**:
 
 > Help a student organize each course, understand its material, prepare before assessments and light assignments, and build mastery through traceable learning support.
 
@@ -41,13 +41,19 @@ ReviewFlow should become a **source-grounded academic course companion**:
 
 ## Product Vision Discussion Log
 
+### May 25, 2026: Working Product Name Selected
+
+**Decision:** Use **CourseKin** as the working product name for the v2 build and future SaaS identity, replacing the original ReviewFlow working name.
+
+**Rationale:** The name expresses an ongoing, supportive course relationship rather than a single reviewer-generation action. Domain acquisition, social handles, and formal trademark clearance remain required before public launch.
+
 ### May 25, 2026: v2 Course Companion Concept
 
 **Status:** Accepted product direction for v2; implementation sequence remains subject to engineering breakdown and validation.
 
 #### Proposed Direction
 
-ReviewFlow may evolve from a single reviewer generator into a supportive, course-aware academic companion. The intended relationship is ongoing: it helps a student organize class obligations, preserve learning materials, prepare for assessments, and strengthen understanding without replacing teachers, classmates, or the student's own thinking.
+CourseKin may evolve from a single reviewer generator into a supportive, course-aware academic companion. The intended relationship is ongoing: it helps a student organize class obligations, preserve learning materials, prepare for assessments, and strengthen understanding without replacing teachers, classmates, or the student's own thinking.
 
 Proposed experience loop:
 
@@ -99,7 +105,7 @@ External web material may later support definitions or additional sources, but i
 
 #### Coursework Support Boundary
 
-ReviewFlow should help students produce reviewers and prepare for coursework, including light assignments and short papers. Proposed support includes requirement breakdown, rubric extraction, planning, explanations, outlines, source organization, and draft feedback.
+CourseKin should help students produce reviewers and prepare for coursework, including light assignments and short papers. Proposed support includes requirement breakdown, rubric extraction, planning, explanations, outlines, source organization, and draft feedback.
 
 The product should initially limit or defer:
 
@@ -138,14 +144,14 @@ The owner's `todo-app-backbone` project confirms useful patterns for the course 
 - Voice-planned actions that require explicit review before applying changes.
 - Comments and attachments as an early reference for the eventual private course stream.
 
-ReviewFlow should implement these ideas in its existing SaaS foundation rather than merge the separate app runtime. ReviewFlow already owns Clerk authentication, verified resource ownership, queued AI generation, quotas, object storage, account export/deletion, and production safeguards. The reference project uses a separate authentication model, SQLite-oriented persistence, local file uploads, and an in-process reminder scheduler that are not appropriate as the deployed ReviewFlow architecture.
+CourseKin should implement these ideas in its existing SaaS foundation rather than merge the separate app runtime. CourseKin already owns Clerk authentication, verified resource ownership, queued AI generation, quotas, object storage, account export/deletion, and production safeguards. The reference project uses a separate authentication model, SQLite-oriented persistence, local file uploads, and an in-process reminder scheduler that are not appropriate as the deployed CourseKin architecture.
 
 #### Integration Decision
 
-- Convert the generic `Folder` idea into a ReviewFlow `Course` workspace.
-- Convert to-dos into ReviewFlow-owned `CourseTask`, `Assessment`, and `PreparationMilestone` records.
+- Convert the generic `Folder` idea into a CourseKin `Course` workspace.
+- Convert to-dos into CourseKin-owned `CourseTask`, `Assessment`, and `PreparationMilestone` records.
 - Preserve the confirmation-first behavior: syllabus, photo, text, or later voice extraction creates proposals; only a student confirmation creates deadlines or calendar entries.
-- Reuse recurrence, reminder, streak, and workload-planning concepts through new ReviewFlow backend models and worker-driven jobs.
+- Reuse recurrence, reminder, streak, and workload-planning concepts through new CourseKin backend models and worker-driven jobs.
 - Treat `.ics` export as a useful early calendar capability; defer write-access calendar synchronization until minimal-access and confirmation policies are implemented.
 - Treat comments/attachments as design input for a persistent course stream, not as an existing stream implementation.
 - Keep lecture recording and live transcription deferred until privacy, consent, retention, deletion, and cost requirements are complete.
@@ -241,7 +247,7 @@ Goal: establish the ongoing student-to-course relationship and prevent last-minu
 - [ ] Extract assessments, light assignments, projects, deadlines, rubrics, topic coverage, and uncertain fields.
 - [ ] Require student review and correction before tasks or calendar entries are synchronized.
 - [x] Review the owner's to-do/calendar system and record reusable behavior patterns and architecture boundaries.
-- [ ] Implement ReviewFlow-owned confirmed task, milestone, reminder, and calendar-export capabilities based on the reviewed patterns.
+- [ ] Implement CourseKin-owned confirmed task, milestone, reminder, and calendar-export capabilities based on the reviewed patterns.
 - [ ] Add an assessment runway showing due dates, readiness, missing materials, and recommended preparation.
 - [ ] Add a workload balancer that distributes preparation and bounded project steps across the available term.
 
@@ -391,7 +397,7 @@ Goal: broaden course input and institutional connectivity only after the core co
 
 ### v2 Phase A: Evidence-Linked Reviewers
 
-**Objective:** Make ReviewFlow noticeably more trustworthy than basic AI generators.
+**Objective:** Make CourseKin noticeably more trustworthy than basic AI generators.
 
 - [ ] Implement source chunk/page indexing.
 - [ ] Add citations and source highlighting for generated content.

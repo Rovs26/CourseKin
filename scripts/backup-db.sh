@@ -8,19 +8,19 @@
 #   AWS_ACCESS_KEY_ID       — R2 access key
 #   AWS_SECRET_ACCESS_KEY   — R2 secret key
 #
-# The target bucket "reviewflow-backups" should have a lifecycle rule:
+# The target bucket "coursekin-backups" should have a lifecycle rule:
 #   Delete objects older than 30 days.
 
 set -euo pipefail
 
 DATE=$(date -u +%Y%m%d-%H%M%S)
-OUT="/tmp/reviewflow-${DATE}.sql.gz"
+OUT="/tmp/coursekin-${DATE}.sql.gz"
 
 echo "Starting backup ${DATE}..."
 pg_dump "$DATABASE_URL" | gzip > "$OUT"
 
 echo "Uploading to R2..."
-aws s3 cp "$OUT" "s3://reviewflow-backups/${DATE}.sql.gz" \
+aws s3 cp "$OUT" "s3://coursekin-backups/${DATE}.sql.gz" \
   --endpoint-url "$R2_ENDPOINT_URL"
 
 rm "$OUT"

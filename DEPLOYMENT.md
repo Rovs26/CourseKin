@@ -1,8 +1,10 @@
-# ReviewFlow Deployment Runbook
+# CourseKin Deployment Runbook
+
+`coursekin.app` addresses and email addresses in this runbook are provisional deployment targets. Acquire and verify the final domain before configuring DNS, legal contact mailboxes, or production traffic.
 
 ## Environments
-- Production: api.reviewflow.app (Railway) + reviewflow.app (Vercel)
-- Staging: api-staging.reviewflow.app (Railway API + worker) + a Vercel preview or staging domain, using separate staging provider data
+- Production: api.coursekin.app (Railway) + coursekin.app (Vercel)
+- Staging: api-staging.coursekin.app (Railway API + worker) + a Vercel preview or staging domain, using separate staging provider data
 - Local dev: docker-compose in `docker/docker-compose.yml`
 
 ### Staging boundary
@@ -11,7 +13,7 @@ Do not connect preview testing to production data or production uploads. Before 
 
 - A Railway staging API service and a Railway staging generation worker.
 - A Neon staging/dev branch for `DATABASE_URL`.
-- A dedicated `reviewflow-staging-uploads` R2 bucket with the same temporary-object lifecycle policy as production.
+- A dedicated `coursekin-staging-uploads` R2 bucket with the same temporary-object lifecycle policy as production.
 - Clerk development or staging keys and a Turnstile staging widget.
 - A staging Redis instance or isolated Redis database for distributed limiter verification.
 - Staging Axiom/Sentry labeling or datasets so acceptance-test noise is distinguishable from production.
@@ -29,10 +31,10 @@ In `APP_ENV=production`, the API and worker intentionally refuse to boot with SQ
 
 ```
 # Core
-APP_NAME=ReviewFlow API
+APP_NAME=CourseKin API
 APP_ENV=production                 # use staging for the isolated staging API/worker
 DATABASE_URL=postgresql://...         # Neon connection string (pooled)
-FRONTEND_URL=https://reviewflow.app
+FRONTEND_URL=https://coursekin.app
 
 # OpenAI
 OPENAI_API_KEY=sk-...
@@ -65,7 +67,7 @@ ADMIN_EMAILS=your@email.com
 # Observability
 SENTRY_DSN_API=https://...@sentry.io/...
 AXIOM_TOKEN=xaat-...
-AXIOM_DATASET=reviewflow-prod
+AXIOM_DATASET=coursekin-prod
 RESEND_API_KEY=re_...
 
 # Polar payments (enable only after live acceptance tests)
@@ -79,7 +81,7 @@ POLAR_PLUS_YEARLY_PRODUCT_ID=      # Product ID from the Plus Yearly product
 R2_ACCOUNT_ID=...
 R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
-R2_BUCKET_NAME=reviewflow-uploads
+R2_BUCKET_NAME=coursekin-uploads
 R2_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
 R2_PRESIGN_EXPIRY_SECONDS=300
 ```
@@ -115,7 +117,7 @@ Reference all variables from the main API service using Railway's "reference var
 # References DATABASE_URL from main service.
 # Also needs R2 credentials for the backups bucket:
 R2_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
-AWS_ACCESS_KEY_ID=...         # R2 key scoped to reviewflow-backups bucket only
+AWS_ACCESS_KEY_ID=...         # R2 key scoped to coursekin-backups bucket only
 AWS_SECRET_ACCESS_KEY=...
 # Start command:
 #   bash scripts/backup-db.sh
@@ -129,7 +131,7 @@ Use Node.js 20.19 or newer. Paste the following into Vercel → your project →
 
 ```
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
-NEXT_PUBLIC_REVIEWFLOW_API_URL=https://api.reviewflow.app
+NEXT_PUBLIC_COURSEKIN_API_URL=https://api.coursekin.app
 NEXT_PUBLIC_BILLING_ENABLED=false
 NEXT_PUBLIC_APP_ENV=production
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
@@ -203,7 +205,7 @@ After deploying the isolated staging API, worker, and frontend, run:
 ```bash
 cd api
 python -m scripts.staging_smoke \
-  --api-url https://api-staging.reviewflow.app \
+  --api-url https://api-staging.coursekin.app \
   --frontend-url https://<staging-frontend-domain> \
   --expected-env staging
 ```
@@ -211,9 +213,9 @@ python -m scripts.staging_smoke \
 For the authenticated read check, create or sign into a staging-only test account, obtain a short-lived Clerk token, and pass it through an environment variable rather than a shell argument:
 
 ```bash
-REVIEWFLOW_SMOKE_BEARER_TOKEN="<short-lived-staging-token>" \
+COURSEKIN_SMOKE_BEARER_TOKEN="<short-lived-staging-token>" \
 python -m scripts.staging_smoke \
-  --api-url https://api-staging.reviewflow.app \
+  --api-url https://api-staging.coursekin.app \
   --frontend-url https://<staging-frontend-domain> \
   --expected-env staging
 ```
@@ -226,13 +228,13 @@ This smoke script does not create, edit, upload, generate, or delete data. Compl
 
 ### Daily backup
 `scripts/backup-db.sh` runs as a Railway cron service (02:00 UTC daily).
-It does `pg_dump | gzip` and uploads to the `reviewflow-backups` R2 bucket.
+It does `pg_dump | gzip` and uploads to the `coursekin-backups` R2 bucket.
 Lifecycle rule: delete objects older than 30 days (set in Cloudflare R2 bucket settings).
 
 ### To restore from backup
 ```bash
 # 1. Download the backup
-aws s3 cp s3://reviewflow-backups/20260425-020000.sql.gz /tmp/restore.sql.gz \
+aws s3 cp s3://coursekin-backups/20260425-020000.sql.gz /tmp/restore.sql.gz \
   --endpoint-url "$R2_ENDPOINT_URL"
 
 # 2. Decompress
@@ -295,7 +297,7 @@ Configure these in Axiom → Monitors after first logs arrive in production.
 ### 1. Error rate >5/min
 **Query (APL):**
 ```
-['reviewflow-prod']
+['coursekin-prod']
 | where level == "ERROR"
 | summarize count() by bin(_time, 1m)
 | where count_ > 5
@@ -306,7 +308,7 @@ Configure these in Axiom → Monitors after first logs arrive in production.
 ### 2. Failed jobs ratio >20% over 1 hour
 **Query (APL):**
 ```
-['reviewflow-prod']
+['coursekin-prod']
 | where logger contains "generation_service" and message contains "failed"
 | summarize count() by bin(_time, 1h)
 ```

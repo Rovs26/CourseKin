@@ -39,7 +39,7 @@ services:
     build:
       context: ../frontend
       args:
-        - NEXT_PUBLIC_REVIEWFLOW_API_URL=${API_URL:-http://api:8000}
+        - NEXT_PUBLIC_COURSEKIN_API_URL=${API_URL:-http://api:8000}
     restart: unless-stopped
     ports:
       - "3000:3000"

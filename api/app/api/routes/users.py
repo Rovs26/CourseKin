@@ -229,7 +229,7 @@ def export_my_data(
         buf,
         media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="reviewflow-export-{user_id[:8]}.zip"'
+            "Content-Disposition": f'attachment; filename="coursekin-export-{user_id[:8]}.zip"'
         },
     )
 

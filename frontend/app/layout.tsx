@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ReviewFlow",
+  title: "CourseKin",
   description: "Generate study reviewers from your notes, PDFs, and links",
 };
 

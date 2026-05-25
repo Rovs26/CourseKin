@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getReviewer } from "@/lib/reviewflow-api";
+import { getReviewer } from "@/lib/coursekin-api";
 import type { ReviewerOutput } from "@/types/reviewer";
 
 export function useReviewer(projectId?: string) {

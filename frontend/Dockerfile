@@ -12,8 +12,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build-time env vars (override via --build-arg)
-ARG NEXT_PUBLIC_REVIEWFLOW_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_REVIEWFLOW_API_URL=$NEXT_PUBLIC_REVIEWFLOW_API_URL
+ARG NEXT_PUBLIC_COURSEKIN_API_URL=http://localhost:8000
+ENV NEXT_PUBLIC_COURSEKIN_API_URL=$NEXT_PUBLIC_COURSEKIN_API_URL
 
 RUN npm run build
 

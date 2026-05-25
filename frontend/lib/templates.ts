@@ -1,4 +1,4 @@
-import type { ReviewerSectionId, SectionCounts } from "@/lib/reviewflow-api";
+import type { ReviewerSectionId, SectionCounts } from "@/lib/coursekin-api";
 import type { TemplateId } from "@/types/project";
 
 export interface TemplateConfig {

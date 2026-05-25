@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Subprocessor List — ReviewFlow",
+  title: "Subprocessor List — CourseKin",
 };
 
 const subprocessors = [
@@ -81,7 +81,7 @@ const subprocessors = [
     name: "Polar",
     role: "Payment processing and billing (merchant of record)",
     location: "Sweden / United States",
-    data: "Payment information, subscription status, billing email. ReviewFlow does not see full card numbers.",
+    data: "Payment information, subscription status, billing email. CourseKin does not see full card numbers.",
     safeguards: "GDPR-compliant as EU-based merchant; PCI DSS compliant for payment processing; DPA available from Polar",
     dpa: "polar.sh/legal",
     note: "Only active if you subscribe to a paid plan.",
@@ -94,7 +94,7 @@ export default function DpaPage() {
       <nav className="border-b border-slate-200">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
           <Link href="/" className="text-lg font-semibold tracking-tight text-slate-900">
-            ReviewFlow
+            CourseKin
           </Link>
         </div>
       </nav>
@@ -105,9 +105,9 @@ export default function DpaPage() {
 
         <div className="mt-6 text-sm leading-7 text-slate-600">
           <p>
-            ReviewFlow uses the following third-party subprocessors to provide its service. All
+            CourseKin uses the following third-party subprocessors to provide its service. All
             subprocessors are bound by a Data Processing Agreement (DPA) and handle personal data
-            only as instructed by ReviewFlow, for the purposes described below.
+            only as instructed by CourseKin, for the purposes described below.
           </p>
           <p className="mt-3">
             For transfers from the EU/EEA/UK to the United States, we rely on Standard Contractual
@@ -117,8 +117,8 @@ export default function DpaPage() {
           <p className="mt-3">
             To receive advance notice of subprocessor changes, or to object to a new subprocessor,
             contact{" "}
-            <a href="mailto:privacy@reviewflow.app" className="font-medium text-slate-900 underline">
-              privacy@reviewflow.app
+            <a href="mailto:privacy@coursekin.app" className="font-medium text-slate-900 underline">
+              privacy@coursekin.app
             </a>
             .
           </p>
@@ -160,9 +160,9 @@ export default function DpaPage() {
         <div className="mt-12 rounded-2xl bg-slate-50 p-6 text-sm text-slate-600">
           <h2 className="font-semibold text-slate-900">Signing DPAs</h2>
           <p className="mt-2">
-            If you require a signed DPA with ReviewFlow for your own GDPR compliance, contact{" "}
-            <a href="mailto:privacy@reviewflow.app" className="font-medium text-slate-900 underline">
-              privacy@reviewflow.app
+            If you require a signed DPA with CourseKin for your own GDPR compliance, contact{" "}
+            <a href="mailto:privacy@coursekin.app" className="font-medium text-slate-900 underline">
+              privacy@coursekin.app
             </a>
             . During early access, we will review DPA requests on a case-by-case basis.
           </p>
@@ -171,7 +171,7 @@ export default function DpaPage() {
 
       <footer className="border-t border-slate-200">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-6">
-          <p className="text-sm text-slate-500">&copy; {new Date().getFullYear()} ReviewFlow</p>
+          <p className="text-sm text-slate-500">&copy; {new Date().getFullYear()} CourseKin</p>
           <div className="flex gap-4 text-sm text-slate-500">
             <Link href="/privacy" className="hover:text-slate-900">Privacy</Link>
             <Link href="/terms" className="hover:text-slate-900">Terms</Link>

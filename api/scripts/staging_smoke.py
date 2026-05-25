@@ -1,13 +1,13 @@
-"""Minimal post-deploy smoke checks for a ReviewFlow staging environment.
+"""Minimal post-deploy smoke checks for a CourseKin staging environment.
 
 This script deliberately avoids performing mutations. With a Clerk bearer
 token provided through an environment variable, it also verifies one
 authenticated read endpoint.
 
 Example:
-    REVIEWFLOW_SMOKE_BEARER_TOKEN=... python -m scripts.staging_smoke \
-        --api-url https://api-staging.reviewflow.app \
-        --frontend-url https://staging.reviewflow.app \
+    COURSEKIN_SMOKE_BEARER_TOKEN=... python -m scripts.staging_smoke \
+        --api-url https://api-staging.coursekin.app \
+        --frontend-url https://staging.coursekin.app \
         --expected-env staging
 """
 
@@ -93,7 +93,7 @@ def run(api_url: str, frontend_url: str, expected_env: str, token_env: str) -> b
     results.append(
         _check(
             "Frontend landing page",
-            status == 200 and "ReviewFlow" in page,
+            status == 200 and "CourseKin" in page,
             f"HTTP {status}",
         )
     )
@@ -118,13 +118,13 @@ def run(api_url: str, frontend_url: str, expected_env: str, token_env: str) -> b
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run non-mutating ReviewFlow staging smoke checks.")
+    parser = argparse.ArgumentParser(description="Run non-mutating CourseKin staging smoke checks.")
     parser.add_argument("--api-url", required=True, help="Base URL for the staging API.")
     parser.add_argument("--frontend-url", required=True, help="Base URL for the staging frontend.")
     parser.add_argument("--expected-env", default="staging", help="Expected API APP_ENV value.")
     parser.add_argument(
         "--token-env",
-        default="REVIEWFLOW_SMOKE_BEARER_TOKEN",
+        default="COURSEKIN_SMOKE_BEARER_TOKEN",
         help="Environment variable containing an optional Clerk bearer token.",
     )
     args = parser.parse_args()

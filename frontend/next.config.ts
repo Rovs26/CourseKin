@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const apiUrl =
+  process.env.NEXT_PUBLIC_COURSEKIN_API_URL ??
   process.env.NEXT_PUBLIC_REVIEWFLOW_API_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
   "http://localhost:8000";
@@ -22,6 +23,6 @@ const nextConfig: NextConfig = {
 export default withSentryConfig(nextConfig, {
   silent: true,
   org: process.env.SENTRY_ORG,
-  project: "reviewflow-web",
+  project: process.env.SENTRY_PROJECT ?? "coursekin-web",
   authToken: process.env.SENTRY_AUTH_TOKEN, // server-side only, for source map uploads
 });

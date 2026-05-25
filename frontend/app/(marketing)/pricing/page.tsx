@@ -135,7 +135,7 @@ export default function PricingPage() {
 
       <p className="mt-12 text-sm text-slate-500">
         Questions?{" "}
-        <a href="mailto:support@reviewflow.app" className="underline underline-offset-2">
+        <a href="mailto:support@coursekin.app" className="underline underline-offset-2">
           Email us
         </a>
         . All prices in USD. Taxes calculated at checkout by Polar.

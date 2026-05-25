@@ -8,7 +8,7 @@ import {
   banUser,
   unbanUser,
   type AbuseSummary,
-} from "@/lib/reviewflow-api";
+} from "@/lib/coursekin-api";
 
 export default function AbusePage() {
   const [summary, setSummary] = useState<AbuseSummary | null>(null);

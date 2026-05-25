@@ -35,7 +35,7 @@ export function Sidebar() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-sm font-bold text-slate-900">
             R
           </div>
-          <p className="text-lg font-semibold tracking-tight">ReviewFlow</p>
+          <p className="text-lg font-semibold tracking-tight">CourseKin</p>
         </Link>
       </div>
 

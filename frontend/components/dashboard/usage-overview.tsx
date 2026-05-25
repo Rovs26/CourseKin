@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import type { ProjectSummary } from "@/lib/reviewflow-api";
+import type { ProjectSummary } from "@/lib/coursekin-api";
 
 export function UsageOverview({
   summaries,

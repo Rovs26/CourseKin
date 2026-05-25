@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { File, FileText, Globe, Link2, Sparkles, Trash2 } from "lucide-react";
 import { SourceStatusBadge } from "@/components/sources/source-status-badge";
-import { deleteSource } from "@/lib/reviewflow-api";
+import { deleteSource } from "@/lib/coursekin-api";
 import type { Source } from "@/types/source";
 
 const iconMap = {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Terms of Use — ReviewFlow",
+  title: "Terms of Use — CourseKin",
 };
 
 export default function TermsPage() {
@@ -10,7 +10,7 @@ export default function TermsPage() {
       <nav className="border-b border-slate-200">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <Link href="/" className="text-lg font-semibold tracking-tight text-slate-900">
-            ReviewFlow
+            CourseKin
           </Link>
         </div>
       </nav>
@@ -23,7 +23,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900">1. Acceptance</h2>
             <p className="mt-3">
-              By creating an account or using ReviewFlow, you agree to these terms. If you do not
+              By creating an account or using CourseKin, you agree to these terms. If you do not
               agree, do not use the service.
             </p>
           </section>
@@ -31,12 +31,12 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900">2. Eligibility</h2>
             <p className="mt-3">
-              You must be at least <strong>16 years old</strong> to use ReviewFlow. If you are
+              You must be at least <strong>16 years old</strong> to use CourseKin. If you are
               between 13 and 16, you may only use the service with verifiable parental consent as
               required by COPPA or applicable local law.
             </p>
             <p className="mt-3">
-              By using ReviewFlow, you confirm that you meet this age requirement. We chose 16 as
+              By using CourseKin, you confirm that you meet this age requirement. We chose 16 as
               the minimum because GDPR Article 8 sets 16 as the default age of consent for data
               processing across the EU. If we discover that a user is under 16 without parental
               consent, we will delete their account.
@@ -44,9 +44,9 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-slate-900">3. What ReviewFlow Does</h2>
+            <h2 className="text-lg font-semibold text-slate-900">3. What CourseKin Does</h2>
             <p className="mt-3">
-              ReviewFlow is a study tool that generates structured review materials (summaries, key
+              CourseKin is a study tool that generates structured review materials (summaries, key
               points, definitions, Q&amp;A, quizzes, and flashcards) from content you provide.
               Content generation is powered by third-party AI models (currently OpenAI).
             </p>
@@ -55,9 +55,9 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900">4. Your Content</h2>
             <ul className="mt-3 list-disc space-y-1 pl-5">
-              <li>You retain ownership of all content you upload to ReviewFlow.</li>
+              <li>You retain ownership of all content you upload to CourseKin.</li>
               <li>
-                You grant ReviewFlow a limited, non-exclusive license to process your content
+                You grant CourseKin a limited, non-exclusive license to process your content
                 solely for the purpose of generating your requested study materials and providing
                 the service to you.
               </li>
@@ -100,13 +100,13 @@ export default function TermsPage() {
             <h2 className="text-lg font-semibold text-slate-900">6. AI Accuracy Disclaimer</h2>
             <p className="mt-3">
               Generated flashcards, summaries, and quizzes may contain errors, omissions, or
-              inaccuracies. <strong>ReviewFlow is a study aid, not a source of truth.</strong>{" "}
+              inaccuracies. <strong>CourseKin is a study aid, not a source of truth.</strong>{" "}
               Always verify important facts against your original source material before relying on
               generated content for exams, research, or any consequential purpose.
             </p>
             <p className="mt-3">
               AI-generated content reflects patterns in training data and may reflect biases or
-              outdated information. ReviewFlow makes no warranty as to the accuracy, completeness,
+              outdated information. CourseKin makes no warranty as to the accuracy, completeness,
               or fitness for any particular purpose of any generated output.
             </p>
           </section>
@@ -114,7 +114,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900">7. Service Availability</h2>
             <p className="mt-3">
-              ReviewFlow is provided on an &quot;as is&quot; and &quot;as available&quot; basis.
+              CourseKin is provided on an &quot;as is&quot; and &quot;as available&quot; basis.
               We do not guarantee uptime or uninterrupted access. We may modify, suspend, or
               discontinue the service at any time, with or without notice, particularly during the
               early/free access period. We will make reasonable efforts to notify users of
@@ -144,15 +144,15 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900">9. Intellectual Property</h2>
             <p className="mt-3">
-              The ReviewFlow application, including its design, code, and branding, is our
+              The CourseKin application, including its design, code, and branding, is our
               intellectual property. Your use of the service does not grant you any rights to our
               intellectual property beyond what is necessary to use the service.
             </p>
             <p className="mt-3">
-              If you believe content on ReviewFlow infringes your intellectual property rights,
+              If you believe content on CourseKin infringes your intellectual property rights,
               contact us at{" "}
-              <a href="mailto:legal@reviewflow.app" className="font-medium text-slate-900 underline">
-                legal@reviewflow.app
+              <a href="mailto:legal@coursekin.app" className="font-medium text-slate-900 underline">
+                legal@coursekin.app
               </a>{" "}
               with details of the alleged infringement.
             </p>
@@ -161,7 +161,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900">10. Limitation of Liability</h2>
             <p className="mt-3">
-              To the maximum extent permitted by law, ReviewFlow and its operators are not liable
+              To the maximum extent permitted by law, CourseKin and its operators are not liable
               for any indirect, incidental, or consequential damages arising from your use of the
               service, including any reliance on AI-generated content. Our total liability is
               limited to the amount you have paid for the service in the three months preceding
@@ -174,7 +174,7 @@ export default function TermsPage() {
             <p className="mt-3">
               These terms are governed by the laws of the Republic of the Philippines, without
               regard to conflict-of-law principles. Any disputes arising from these terms or your
-              use of ReviewFlow shall be resolved in the courts of the Philippines, unless
+              use of CourseKin shall be resolved in the courts of the Philippines, unless
               applicable consumer protection law in your jurisdiction requires otherwise.
             </p>
           </section>
@@ -192,8 +192,8 @@ export default function TermsPage() {
             <h2 className="text-lg font-semibold text-slate-900">13. Contact</h2>
             <p className="mt-3">
               Questions about these terms? Contact us at{" "}
-              <a href="mailto:legal@reviewflow.app" className="font-medium text-slate-900 underline">
-                legal@reviewflow.app
+              <a href="mailto:legal@coursekin.app" className="font-medium text-slate-900 underline">
+                legal@coursekin.app
               </a>
               .
             </p>
@@ -203,7 +203,7 @@ export default function TermsPage() {
 
       <footer className="border-t border-slate-200">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-6">
-          <p className="text-sm text-slate-500">&copy; {new Date().getFullYear()} ReviewFlow</p>
+          <p className="text-sm text-slate-500">&copy; {new Date().getFullYear()} CourseKin</p>
           <div className="flex gap-4 text-sm text-slate-500">
             <Link href="/privacy" className="hover:text-slate-900">Privacy</Link>
             <Link href="/terms" className="font-medium text-slate-900">Terms</Link>

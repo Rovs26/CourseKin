@@ -24,7 +24,7 @@ import {
   type JobStage,
   type ReviewerSectionId,
   type SourceGenerationConfig,
-} from "@/lib/reviewflow-api";
+} from "@/lib/coursekin-api";
 import { routes } from "@/lib/routes";
 import { useProject } from "@/hooks/use-project";
 import { useReviewer } from "@/hooks/use-reviewer";

@@ -2,10 +2,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    APP_NAME: str = "ReviewFlow API"
+    APP_NAME: str = "CourseKin API"
     APP_ENV: str = "development"
     DATABASE_URL: str = "sqlite:///./data/reviewflow.db"
-    FRONTEND_URL: str = ""  # e.g. "https://reviewflow.app" — added to CORS in production
+    FRONTEND_URL: str = ""  # e.g. "https://coursekin.app" - added to CORS in production
 
     # ── OpenAI ────────────────────────────────────────────────────────────────
     OPENAI_API_KEY: str = ""
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     CLERK_JWKS_URL: str = ""
     # Secret key from Clerk dashboard → API Keys (used for server-side SDK calls)
     CLERK_SECRET_KEY: str = ""
-    # JWT issuer — Clerk instance URL, e.g. "https://clerk.reviewflow.app"
+    # JWT issuer - Clerk instance URL, e.g. "https://clerk.coursekin.app"
     # Leave empty in development if not enforcing issuer
     CLERK_ISSUER: str = ""
 
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     SENTRY_DSN_API: str = ""
     # From Axiom dashboard → Settings → API Tokens
     AXIOM_TOKEN: str = ""
-    AXIOM_DATASET: str = "reviewflow-prod"
+    AXIOM_DATASET: str = "coursekin-prod"
     # From Resend dashboard → API Keys (used by daily_digest.py)
     RESEND_API_KEY: str = ""
 
@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     R2_ACCOUNT_ID: str = ""
     R2_ACCESS_KEY_ID: str = ""
     R2_SECRET_ACCESS_KEY: str = ""
-    R2_BUCKET_NAME: str = "reviewflow-uploads"
+    R2_BUCKET_NAME: str = "coursekin-uploads"
     # e.g. https://<account-id>.r2.cloudflarestorage.com
     R2_ENDPOINT_URL: str = ""
     # Presigned PUT URL lifetime — 5 minutes is enough to complete any upload

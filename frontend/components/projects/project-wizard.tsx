@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { createProject } from "@/lib/reviewflow-api";
+import { createProject } from "@/lib/coursekin-api";
 import { routes } from "@/lib/routes";
 import type {
   AgeBracket,

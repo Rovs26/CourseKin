@@ -242,7 +242,7 @@ def test_polar_checkout_uses_products_contract(monkeypatch):
     monkeypatch.setattr(settings, "BILLING_ENABLED", True)
     monkeypatch.setattr(settings, "POLAR_ACCESS_TOKEN", "token")
     monkeypatch.setattr(settings, "POLAR_PLUS_MONTHLY_PRODUCT_ID", "prod_monthly")
-    monkeypatch.setattr(settings, "FRONTEND_URL", "https://reviewflow.app")
+    monkeypatch.setattr(settings, "FRONTEND_URL", "https://coursekin.app")
 
     def post(url, headers, json, timeout):
         captured.update({"url": url, "json": json})

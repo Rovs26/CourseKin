@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getProject } from "@/lib/reviewflow-api";
+import { getProject } from "@/lib/coursekin-api";
 import type { Project } from "@/types/project";
 
 export function useProject(projectId?: string) {

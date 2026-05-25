@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { listProjectSources } from "@/lib/reviewflow-api";
+import { listProjectSources } from "@/lib/coursekin-api";
 import type { Source } from "@/types/source";
 
 export function useSources(projectId?: string) {

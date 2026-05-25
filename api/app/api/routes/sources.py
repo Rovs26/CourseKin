@@ -62,7 +62,7 @@ def _fetch_public_url(url: str):
         resp = http_requests.get(
             current_url,
             timeout=15,
-            headers={"User-Agent": "ReviewFlow/1.0"},
+            headers={"User-Agent": "CourseKin/1.0"},
             stream=True,
             allow_redirects=False,
         )

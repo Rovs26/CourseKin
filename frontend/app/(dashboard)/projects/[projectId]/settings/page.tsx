@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { RightPanel } from "@/components/layout/right-panel";
 import { EmptyState } from "@/components/states/empty-state";
 import { useProject } from "@/hooks/use-project";
-import { deleteProject } from "@/lib/reviewflow-api";
+import { deleteProject } from "@/lib/coursekin-api";
 import { Button } from "@/components/ui/button";
 
 export default function ProjectSettingsPage() {

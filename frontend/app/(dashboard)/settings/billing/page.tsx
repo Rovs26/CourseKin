@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 const API_BASE =
-  (process.env.NEXT_PUBLIC_REVIEWFLOW_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+  (process.env.NEXT_PUBLIC_COURSEKIN_API_URL ?? process.env.NEXT_PUBLIC_REVIEWFLOW_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 const BILLING_ENABLED = process.env.NEXT_PUBLIC_BILLING_ENABLED === "true";
 
 type SubscriptionData = {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { listProjectSummaries, type ProjectSummary } from "@/lib/reviewflow-api";
+import { listProjectSummaries, type ProjectSummary } from "@/lib/coursekin-api";
 
 export function useProjectSummaries() {
   const [summaries, setSummaries] = useState<ProjectSummary[]>([]);
