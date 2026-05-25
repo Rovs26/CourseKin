@@ -228,13 +228,14 @@ These items should be completed before accepting real paid users.
 
 Goal: make every generated study artifact reliable and defensible.
 
-- [ ] Add citations to each generated item: source ID, page/chunk reference, and supporting excerpt.
-- [ ] Add `View source` interactions for summary paragraphs, flashcards, Q&A, and quiz rationales.
-- [ ] Add evidence states such as `supported`, `weak support`, and `not found in source`.
+- [x] Add citations to each generated item: source ID, page/chunk reference, and supporting excerpt.
+- [x] Add inline `View evidence` interactions for summaries, key points, definitions, flashcards, Q&A, and quiz rationales.
+- [ ] Add full source-document navigation/highlighting from citations.
+- [ ] Expand evidence states beyond source-linked and not-found to a defensible `weak support` classification.
 - [ ] Separate class/course evidence, student notes, external web references, and AI explanations in every generated output.
-- [ ] Include source citations in exported reviewer PDFs.
-- [ ] Add user feedback controls: accurate, unsupported, unclear, or incorrect.
-- [ ] Track feedback so prompts and generation quality can be improved.
+- [x] Include source citations in exported reviewer PDFs.
+- [x] Add user feedback controls: accurate, unsupported, unclear, or incorrect.
+- [x] Track versioned item feedback so prompts and generation quality can be improved.
 
 **Why first:** Basic AI generation is common. Source-linked output creates trust and is required for serious exam preparation.
 
@@ -360,7 +361,7 @@ Goal: broaden course input and institutional connectivity only after the core co
 
 ### AI Cost and Latency
 
-- [ ] Store source chunks with stable identifiers and page references.
+- [x] Store source chunks with stable identifiers and page references.
 - [ ] Use retrieval to send only relevant chunks for each generation task.
 - [ ] Cache artifacts separately: summary, flashcards, quiz items, and explanations.
 - [ ] Regenerate only impacted artifacts when a source changes.
@@ -399,10 +400,13 @@ Goal: broaden course input and institutional connectivity only after the core co
 
 **Objective:** Make CourseKin noticeably more trustworthy than basic AI generators.
 
-- [ ] Implement source chunk/page indexing.
-- [ ] Add citations and source highlighting for generated content.
-- [ ] Include citations in exports.
-- [ ] Capture accuracy feedback from users.
+- [x] Implement source chunk/page indexing.
+- [x] Add validated citations and inline evidence previews for generated content.
+- [ ] Add full source-document navigation/highlighting and weak-support classification.
+- [x] Include citations in exports.
+- [x] Capture accuracy feedback from users.
+
+**May 25, 2026 implementation checkpoint:** v2a stores deterministic chunks for new text, URL, and PDF sources; preserves PDF page references during new ingestion; instructs generation to cite chunk IDs; rejects unindexed citation IDs before display; renders evidence excerpts in reviewer and export views; and stores versioned item feedback. Existing sources are lazily indexed when regenerated, but older already-extracted PDFs require re-upload for page-specific citations because their historical page boundaries were not stored.
 
 ### v2 Phase B: Course Foundation and Semester Planning
 

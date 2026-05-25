@@ -1,5 +1,5 @@
-from pydantic import BaseModel, field_validator
-from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Literal, Optional
 
 from app.schemas.job import MergeMode, SectionCounts, VALID_SECTIONS
 
@@ -26,8 +26,30 @@ class FlashcardItem(BaseModel):
     back: str
 
 
+class CitationItem(BaseModel):
+    chunk_id: str
+    source_id: str
+    source_title: str
+    page_number: Optional[int] = None
+    excerpt: str
+
+
+class EvidenceItem(BaseModel):
+    status: Literal["supported", "weak_support", "not_found"]
+    citations: list[CitationItem] = Field(default_factory=list)
+
+
+class ReviewerEvidence(BaseModel):
+    summary: Optional[EvidenceItem] = None
+    key_points: Optional[list[EvidenceItem]] = None
+    definitions: Optional[list[EvidenceItem]] = None
+    qa: Optional[list[EvidenceItem]] = None
+    quiz: Optional[list[EvidenceItem]] = None
+    flashcards: Optional[list[EvidenceItem]] = None
+
+
 class ReviewerContent(BaseModel):
-    model_config = {"extra": "allow"}
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     summary: Optional[str] = None
     key_points: Optional[list[str]] = None
@@ -35,6 +57,7 @@ class ReviewerContent(BaseModel):
     qa: Optional[list[QAItem]] = None
     quiz: Optional[list[QuizItem]] = None
     flashcards: Optional[list[FlashcardItem]] = None
+    evidence: Optional[ReviewerEvidence] = Field(default=None, alias="_evidence")
 
 
 class ReviewerResponse(BaseModel):
@@ -99,3 +122,39 @@ class CustomPdfRequest(BaseModel):
     """Custom PDF export with user-defined section order and visibility."""
     section_order: list[str]
     visible_sections: list[str]
+
+
+class ReviewerFeedbackRequest(BaseModel):
+    section: str
+    item_index: Optional[int] = None
+    rating: Literal["accurate", "unsupported", "unclear", "incorrect"]
+    comment: Optional[str] = None
+
+    @field_validator("section")
+    @classmethod
+    def validate_section(cls, v: str) -> str:
+        if v not in VALID_SECTIONS:
+            raise ValueError("Unknown reviewer section")
+        return v
+
+    @field_validator("comment")
+    @classmethod
+    def validate_comment(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        value = v.strip()
+        if len(value) > 1000:
+            raise ValueError("Feedback comment must be 1000 characters or fewer")
+        return value or None
+
+
+class ReviewerFeedbackResponse(BaseModel):
+    id: str
+    project_id: str
+    reviewer_version: int
+    section: str
+    item_index: Optional[int] = None
+    rating: Literal["accurate", "unsupported", "unclear", "incorrect"]
+    comment: Optional[str] = None
+    created_at: str
+    updated_at: str

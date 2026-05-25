@@ -13,7 +13,7 @@ from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import Project, Source
+from app.db.models import Project, Source, SourceChunk
 from app.schemas.source import (
     PresignUploadRequest,
     FinalizeUploadRequest,
@@ -24,7 +24,8 @@ from app.schemas.source import (
 )
 from app.core.security import validate_url_safe
 from app.services import storage_service
-from app.services.pdf_service import extract_pdf_text
+from app.services.pdf_service import extract_pdf_pages
+from app.services.source_chunk_service import index_source_chunks
 from app.services.validation_service import (
     validate_pdf_bytes,
     validate_pdf_structure,
@@ -40,6 +41,19 @@ MAX_TEXT_SIZE = 500 * 1024          # 500 KB
 MAX_URL_RESPONSE_SIZE = 5 * 1024 * 1024  # 5 MB
 MAX_TEXT_CHARS = 50_000
 MAX_REDIRECTS = 5
+
+
+def _truncate_pages(page_texts: list[tuple[int, str]], limit: int) -> list[tuple[int, str]]:
+    remaining = limit
+    truncated: list[tuple[int, str]] = []
+    for page_number, text in page_texts:
+        if remaining <= 0:
+            break
+        text_slice = text[:remaining].strip()
+        if text_slice:
+            truncated.append((page_number, text_slice))
+            remaining -= len(text_slice)
+    return truncated
 
 
 def _source_to_dict(source: Source):
@@ -108,6 +122,8 @@ def create_text_source(
         updated_at=now,
     )
     db.add(source)
+    db.flush()
+    index_source_chunks(db, source)
     db.commit()
     db.refresh(source)
     return _source_to_dict(source)
@@ -175,6 +191,8 @@ def create_url_source(
         updated_at=now,
     )
     db.add(source)
+    db.flush()
+    index_source_chunks(db, source)
     db.commit()
     db.refresh(source)
     return _source_to_dict(source)
@@ -234,6 +252,7 @@ def finalize_upload(
         raise HTTPException(status_code=403, detail="Access denied")
 
     extracted_text = ""
+    page_texts: list[tuple[int, str]] = []
     try:
         # Inspect length before downloading; the read is also bounded.
         pdf_bytes = storage_service.download_to_bytes(payload.storage_key, MAX_PDF_BYTES)
@@ -244,7 +263,8 @@ def finalize_upload(
             tmp.write(pdf_bytes)
             tmp_path = tmp.name
 
-        extracted_text = extract_pdf_text(tmp_path)
+        page_texts = extract_pdf_pages(tmp_path)
+        extracted_text = "\n\n".join(text for _, text in page_texts).strip()
         validate_extracted_text(extracted_text)
     except HTTPException:
         storage_service.delete_object(payload.storage_key)
@@ -261,7 +281,8 @@ def finalize_upload(
 
     # Truncate to MAX_TEXT_CHARS — matches the OpenAI generation limit
     if len(extracted_text) > MAX_TEXT_CHARS:
-        extracted_text = extracted_text[:MAX_TEXT_CHARS]
+        page_texts = _truncate_pages(page_texts, MAX_TEXT_CHARS)
+        extracted_text = "\n\n".join(text for _, text in page_texts).strip()
 
     final_storage_key = storage_service.promote_temp_object(payload.storage_key, current_user.user_id)
     now = utc_now_iso()
@@ -277,6 +298,8 @@ def finalize_upload(
         updated_at=now,
     )
     db.add(source)
+    db.flush()
+    index_source_chunks(db, source, page_texts=[(page, text) for page, text in page_texts])
     db.commit()
     db.refresh(source)
     return _source_to_dict(source)
@@ -344,6 +367,7 @@ def delete_source(
         if path.exists():
             path.unlink()
 
+    db.query(SourceChunk).filter(SourceChunk.source_id == source_id).delete()
     db.delete(source)
     db.commit()
     return {"message": "Source deleted successfully"}

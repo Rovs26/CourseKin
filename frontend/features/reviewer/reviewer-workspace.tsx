@@ -507,6 +507,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
           isReviewerVisible && reviewerContent ? (
             <ReviewerTabs
               content={reviewerContent}
+              projectId={projectId}
               onRegenerateSection={() => handleShowMultiSource()}
               isRegeneratingSection={generationMode === "section" && isGenerating}
             />

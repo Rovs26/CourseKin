@@ -4,6 +4,7 @@ Generates a styled, multi-section PDF from content_json.
 """
 
 import io
+from html import escape
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -18,7 +19,7 @@ from reportlab.platypus import (
 )
 
 
-INDIGO = colors.HexColor("#4f46e5")
+INDIGO = colors.HexColor("#087f75")
 SLATE_700 = colors.HexColor("#334155")
 SLATE_500 = colors.HexColor("#64748b")
 SLATE_100 = colors.HexColor("#f1f5f9")
@@ -81,7 +82,43 @@ def _build_styles():
         leftIndent=8 * mm,
     ))
 
+    styles.add(ParagraphStyle(
+        "Citation",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=11,
+        leftIndent=5 * mm,
+        textColor=SLATE_500,
+        spaceAfter=2 * mm,
+    ))
+
     return styles
+
+
+def _evidence_for(content, section, index=None):
+    evidence = content.get("_evidence", {}).get(section)
+    if index is None:
+        return evidence if isinstance(evidence, dict) else None
+    if isinstance(evidence, list) and index < len(evidence):
+        return evidence[index] if isinstance(evidence[index], dict) else None
+    return None
+
+
+def _add_evidence(elements, evidence, styles):
+    if not evidence:
+        return
+    citations = evidence.get("citations", [])
+    if not citations:
+        elements.append(Paragraph("Evidence not linked to a source chunk.", styles["Citation"]))
+        return
+    for citation in citations:
+        source = escape(str(citation.get("source_title", "Source")))
+        page = citation.get("page_number")
+        label = f"{source}, page {page}" if page else source
+        excerpt = escape(str(citation.get("excerpt", "")))
+        elements.append(
+            Paragraph(f"<b>Evidence:</b> {label} - &quot;{excerpt}&quot;", styles["Citation"])
+        )
 
 
 def _add_summary(elements, content, styles):
@@ -94,6 +131,7 @@ def _add_summary(elements, content, styles):
         if paragraph:
             elements.append(Paragraph(paragraph, styles["ItemBody"]))
             elements.append(Spacer(1, 2 * mm))
+    _add_evidence(elements, _evidence_for(content, "summary"), styles)
 
 
 def _add_key_points(elements, content, styles):
@@ -103,6 +141,7 @@ def _add_key_points(elements, content, styles):
     elements.append(Paragraph("Key Points", styles["SectionTitle"]))
     for i, point in enumerate(points, 1):
         elements.append(Paragraph(f"<b>{i}.</b> {point}", styles["ItemBody"]))
+        _add_evidence(elements, _evidence_for(content, "key_points", i - 1), styles)
 
 
 def _add_definitions(elements, content, styles):
@@ -115,6 +154,7 @@ def _add_definitions(elements, content, styles):
         definition = item.get("definition", "")
         elements.append(Paragraph(f"<b>{i}. {term}</b>", styles["ItemLabel"]))
         elements.append(Paragraph(definition, styles["ItemBody"]))
+        _add_evidence(elements, _evidence_for(content, "definitions", i - 1), styles)
         elements.append(Spacer(1, 1 * mm))
 
 
@@ -128,6 +168,7 @@ def _add_qa(elements, content, styles):
         answer = item.get("answer", "")
         elements.append(Paragraph(f"<b>{i}. Q:</b> {question}", styles["ItemLabel"]))
         elements.append(Paragraph(f"<b>A:</b> {answer}", styles["ItemBody"]))
+        _add_evidence(elements, _evidence_for(content, "qa", i - 1), styles)
         elements.append(Spacer(1, 2 * mm))
 
 
@@ -150,6 +191,7 @@ def _add_quiz(elements, content, styles):
         elements.append(Paragraph(f"<b>Answer:</b> {answer}", styles["ItemBody"]))
         if rationale:
             elements.append(Paragraph(f"<i>Rationale: {rationale}</i>", styles["ItemBody"]))
+        _add_evidence(elements, _evidence_for(content, "quiz", i - 1), styles)
         elements.append(Spacer(1, 3 * mm))
 
 
@@ -183,6 +225,11 @@ def _add_flashcards(elements, content, styles):
     ]))
 
     elements.append(table)
+    for i, _card in enumerate(cards, 1):
+        evidence = _evidence_for(content, "flashcards", i - 1)
+        if evidence:
+            elements.append(Paragraph(f"<b>Card {i} evidence</b>", styles["Citation"]))
+            _add_evidence(elements, evidence, styles)
 
 
 DEFAULT_SECTION_ORDER = ["summary", "key_points", "definitions", "qa", "quiz", "flashcards"]

@@ -1,6 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EvidenceCitations } from "@/components/reviewer/evidence-citations";
+import type { ReviewerEvidenceItem, ReviewerFeedbackRating } from "@/types/reviewer";
 
-export function SummaryPanel({ summary }: { summary: string }) {
+export function SummaryPanel({
+  summary,
+  evidence,
+  onFeedback,
+}: {
+  summary: string;
+  evidence?: ReviewerEvidenceItem;
+  onFeedback?: (rating: ReviewerFeedbackRating) => Promise<void>;
+}) {
   return (
     <Card className="rounded-2xl border bg-slate-50 shadow-none">
       <CardHeader>
@@ -8,6 +18,7 @@ export function SummaryPanel({ summary }: { summary: string }) {
       </CardHeader>
       <CardContent>
         <p className="max-w-3xl text-sm leading-7 text-slate-700">{summary}</p>
+        <EvidenceCitations evidence={evidence} onFeedback={onFeedback} />
       </CardContent>
     </Card>
   );

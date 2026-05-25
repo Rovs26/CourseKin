@@ -239,17 +239,17 @@ function SectionContent({
 }) {
   switch (sectionId) {
     case "summary":
-      return <SummaryPanel summary={content.summary} />;
+      return <SummaryPanel summary={content.summary} evidence={content._evidence?.summary} />;
     case "key_points":
-      return <KeyPointsPanel keyPoints={content.key_points} />;
+      return <KeyPointsPanel keyPoints={content.key_points} evidence={content._evidence?.key_points} />;
     case "definitions":
-      return <DefinitionsPanel definitions={content.definitions} />;
+      return <DefinitionsPanel definitions={content.definitions} evidence={content._evidence?.definitions} />;
     case "qa":
-      return <QAPanel items={content.qa} />;
+      return <QAPanel items={content.qa} evidence={content._evidence?.qa} />;
     case "quiz":
-      return <QuizPanel quiz={content.quiz} />;
+      return <QuizPanel quiz={content.quiz} evidence={content._evidence?.quiz} />;
     case "flashcards":
-      return <FlashcardsPanel cards={content.flashcards} />;
+      return <FlashcardsPanel cards={content.flashcards} evidence={content._evidence?.flashcards} />;
     default:
       return null;
   }

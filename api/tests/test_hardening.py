@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.rate_limit import request_ip_key
 from app.core.utils import utc_now_iso
 from app.db.database import Base
-from app.db.models import Job, Project, Reviewer, Source, Subscription, UsageLog
+from app.db.models import Job, Project, Reviewer, Source, SourceChunk, Subscription, UsageLog
 from app.services import job_queue_service
 from app.services.usage_service import record_usage, reserve_usage
 
@@ -163,6 +163,9 @@ def test_worker_claims_queued_job(monkeypatch, db):
     assert updated.attempts == 1
     assert captured["job_id"] == "job-1"
     assert captured["sections"] == ["summary"]
+    assert captured["source_title"] == "Source"
+    assert captured["source_chunks"][0]["id"] == "source-1:chunk-0001"
+    assert db.query(SourceChunk).filter(SourceChunk.source_id == "source-1").count() == 1
 
 
 def test_project_summaries_are_compact_and_user_scoped(db):

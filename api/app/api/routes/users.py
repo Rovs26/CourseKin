@@ -16,7 +16,17 @@ from app.core.config import settings
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
 from app.api.routes.billing import revoke_polar_subscription
-from app.db.models import GenerationCache, Job, Project, Reviewer, Source, Subscription, UsageLog
+from app.db.models import (
+    GenerationCache,
+    Job,
+    Project,
+    Reviewer,
+    ReviewerFeedback,
+    Source,
+    SourceChunk,
+    Subscription,
+    UsageLog,
+)
 from app.services import storage_service
 
 logger = logging.getLogger(__name__)
@@ -58,6 +68,13 @@ def export_my_data(
         if project_ids else []
     )
 
+    source_chunks = (
+        db.execute(
+            select(SourceChunk).where(SourceChunk.project_id.in_(project_ids))
+        ).scalars().all()
+        if project_ids else []
+    )
+
     jobs = (
         db.execute(
             select(Job).where(Job.project_id.in_(project_ids))
@@ -68,6 +85,13 @@ def export_my_data(
     reviewers = (
         db.execute(
             select(Reviewer).where(Reviewer.project_id.in_(project_ids))
+        ).scalars().all()
+        if project_ids else []
+    )
+
+    reviewer_feedback = (
+        db.execute(
+            select(ReviewerFeedback).where(ReviewerFeedback.project_id.in_(project_ids))
         ).scalars().all()
         if project_ids else []
     )
@@ -131,6 +155,17 @@ def export_my_data(
             "updated_at": j.updated_at,
         }
 
+    def chunk_to_dict(chunk: SourceChunk) -> dict:
+        return {
+            "id": chunk.id,
+            "source_id": chunk.source_id,
+            "project_id": chunk.project_id,
+            "ordinal": chunk.ordinal,
+            "page_number": chunk.page_number,
+            "text": chunk.text,
+            "created_at": chunk.created_at,
+        }
+
     def reviewer_to_dict(r: Reviewer) -> dict:
         return {
             "project_id": r.project_id,
@@ -153,6 +188,19 @@ def export_my_data(
             "cost_usd": u.cost_usd,
             "cached": u.cached,
             "created_at": u.created_at,
+        }
+
+    def feedback_to_dict(feedback: ReviewerFeedback) -> dict:
+        return {
+            "id": feedback.id,
+            "project_id": feedback.project_id,
+            "reviewer_version": feedback.reviewer_version,
+            "section": feedback.section,
+            "item_index": None if feedback.item_index == -1 else feedback.item_index,
+            "rating": feedback.rating,
+            "comment": feedback.comment,
+            "created_at": feedback.created_at,
+            "updated_at": feedback.updated_at,
         }
 
     def cache_to_dict(entry: GenerationCache) -> dict:
@@ -202,12 +250,20 @@ def export_my_data(
             json.dumps([source_to_dict(s) for s in sources], indent=2),
         )
         zf.writestr(
+            "source_chunks.json",
+            json.dumps([chunk_to_dict(chunk) for chunk in source_chunks], indent=2),
+        )
+        zf.writestr(
             "jobs.json",
             json.dumps([job_to_dict(j) for j in jobs], indent=2),
         )
         zf.writestr(
             "reviewers.json",
             json.dumps([reviewer_to_dict(r) for r in reviewers], indent=2),
+        )
+        zf.writestr(
+            "reviewer_feedback.json",
+            json.dumps([feedback_to_dict(feedback) for feedback in reviewer_feedback], indent=2),
         )
         zf.writestr(
             "usage_log.json",
@@ -273,6 +329,14 @@ def delete_my_account(
         )
         db.execute(
             Job.__table__.delete().where(Job.project_id.in_(project_ids))
+        )
+        db.execute(
+            ReviewerFeedback.__table__.delete().where(
+                ReviewerFeedback.project_id.in_(project_ids)
+            )
+        )
+        db.execute(
+            SourceChunk.__table__.delete().where(SourceChunk.project_id.in_(project_ids))
         )
         db.execute(
             Source.__table__.delete().where(Source.project_id.in_(project_ids))

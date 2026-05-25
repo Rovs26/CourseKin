@@ -6,6 +6,7 @@ from app.core.utils import utc_now_iso
 from app.db.database import SessionLocal
 from app.db.models import Job, Source
 from app.services.generation_service import run_generation_in_background
+from app.services.source_chunk_service import ensure_source_chunks, serialize_chunks
 from app.services.usage_service import release_reserved_cost
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,9 @@ def process_next_queued_job() -> bool:
         source_id = source.id
         user_id = job.user_id
         source_text = source.text or ""
+        source_title = source.title
+        source_chunks = serialize_chunks(ensure_source_chunks(db, source))
+        db.commit()
     finally:
         db.close()
 
@@ -87,6 +91,8 @@ def process_next_queued_job() -> bool:
         project_id=project_id,
         source_id=source_id,
         source_text=source_text,
+        source_title=source_title,
+        source_chunks=source_chunks,
         user_id=user_id,
         sections=options.get("sections"),
         counts=options.get("counts"),

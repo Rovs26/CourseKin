@@ -12,7 +12,7 @@ from app.db.models import Job, Reviewer, GenerationCache
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2a-cited-reviewers"
 
 # Pricing per million tokens: (input_usd, output_usd)
 PRICING: dict[str, tuple[float, float]] = {
@@ -54,7 +54,14 @@ def _build_prompt(sections: list[str], counts: dict[str, int]) -> tuple[str, str
     """Build system and user prompts for the given sections and counts."""
 
     schema_parts = [SECTION_SCHEMA[s] for s in sections]
-    schema_str = "{\n  " + ",\n  ".join(schema_parts) + "\n}"
+    evidence_parts = []
+    for section in sections:
+        if section == "summary":
+            evidence_parts.append('"summary": ["chunk-id"]')
+        else:
+            evidence_parts.append(f'"{section}": [["chunk-id"]]')
+    evidence_schema = '"_evidence": {\n    ' + ",\n    ".join(evidence_parts) + "\n  }"
+    schema_str = "{\n  " + ",\n  ".join(schema_parts + [evidence_schema]) + "\n}"
 
     section_instructions = []
     for s in sections:
@@ -81,6 +88,9 @@ Write clearly and concretely for students.
 Avoid filler.
 Return strict JSON only.
 Do not wrap the JSON in markdown.
+For every generated claim or study item, add evidence using only the bracketed chunk IDs in the provided source material.
+For list sections, the evidence array must align by index with the generated items.
+If a point cannot be supported by the source chunks, omit that point rather than inventing a citation.
 
 Output schema (return ONLY these fields):
 {schema_str}
@@ -103,8 +113,8 @@ Do not leave fields empty.
 Be as extensive and study oriented as possible.
 Stay strictly grounded in the provided text.
 
-Source text:
-{source_text}"""
+Source material with citation chunk IDs:
+{source_material}"""
 
     return system_prompt, user_prompt
 
@@ -116,7 +126,7 @@ def _compute_cost(model: str, prompt_tokens: int, completion_tokens: int) -> flo
 
 
 def _call_openai(
-    source_text: str,
+    source_material: str,
     sections: list[str],
     counts: dict[str, int],
 ) -> tuple[dict, dict]:
@@ -126,17 +136,13 @@ def _call_openai(
     """
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-    # Hard cap on source text before sending to OpenAI
-    if len(source_text) > settings.MAX_EXTRACTED_CHARS:
-        source_text = source_text[: settings.MAX_EXTRACTED_CHARS]
-
     system_prompt, user_prompt_template = _build_prompt(sections, counts)
 
     logger.info(
         "OpenAI call: model=%s sections=%s source_chars=%d",
         settings.OPENAI_MODEL,
         sections,
-        len(source_text),
+        len(source_material),
     )
     start = time.perf_counter()
 
@@ -144,7 +150,7 @@ def _call_openai(
         model=settings.OPENAI_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt_template.format(source_text=source_text)},
+            {"role": "user", "content": user_prompt_template.format(source_material=source_material)},
         ],
         temperature=0.3,
         response_format={"type": "json_object"},
@@ -183,6 +189,129 @@ def _call_openai(
 LIST_SECTIONS = {"key_points", "definitions", "qa", "quiz", "flashcards"}
 
 
+def _prepare_prompt_chunks(
+    source_id: str,
+    source_text: str,
+    source_chunks: list[dict] | None,
+) -> list[dict]:
+    chunks = source_chunks or [
+        {
+            "id": f"{source_id}:chunk-0001",
+            "source_id": source_id,
+            "page_number": None,
+            "text": source_text,
+        }
+    ]
+    selected: list[dict] = []
+    remaining = settings.MAX_EXTRACTED_CHARS
+
+    for chunk in chunks:
+        text = str(chunk.get("text", "")).strip()
+        if not text or remaining <= 0:
+            continue
+        selected_text = text[:remaining].strip()
+        if not selected_text:
+            continue
+        selected.append({**chunk, "text": selected_text})
+        remaining -= len(selected_text)
+
+    return selected
+
+
+def _format_source_material(chunks: list[dict]) -> str:
+    sections: list[str] = []
+    for chunk in chunks:
+        page_label = f", page {chunk['page_number']}" if chunk.get("page_number") else ""
+        sections.append(f"[{chunk['id']}{page_label}]\n{chunk['text']}")
+    return "\n\n".join(sections)
+
+
+def _citation_ids(raw_entry: object) -> list[str]:
+    candidate = raw_entry
+    if isinstance(raw_entry, dict):
+        candidate = raw_entry.get("chunk_ids") or raw_entry.get("citations") or []
+    if not isinstance(candidate, list):
+        return []
+
+    ids: list[str] = []
+    for value in candidate:
+        if isinstance(value, str):
+            ids.append(value)
+        elif isinstance(value, dict) and isinstance(value.get("chunk_id"), str):
+            ids.append(value["chunk_id"])
+    return ids
+
+
+def _evidence_entry(
+    raw_entry: object,
+    chunks_by_id: dict[str, dict],
+    source_id: str,
+    source_title: str,
+) -> dict:
+    citations = []
+    seen_ids: set[str] = set()
+    for chunk_id in _citation_ids(raw_entry):
+        chunk = chunks_by_id.get(chunk_id)
+        if not chunk or chunk_id in seen_ids:
+            continue
+        seen_ids.add(chunk_id)
+        excerpt = str(chunk["text"]).replace("\n", " ").strip()
+        citations.append(
+            {
+                "chunk_id": chunk_id,
+                "source_id": source_id,
+                "source_title": source_title,
+                "page_number": chunk.get("page_number"),
+                "excerpt": excerpt[:320],
+            }
+        )
+    return {
+        "status": "supported" if citations else "not_found",
+        "citations": citations,
+    }
+
+
+def _normalize_evidence(
+    content: dict,
+    sections: list[str],
+    source_id: str,
+    source_title: str,
+    prompt_chunks: list[dict],
+) -> dict:
+    raw_evidence = content.get("_evidence")
+    if not isinstance(raw_evidence, dict):
+        raw_evidence = {}
+    chunks_by_id = {str(chunk["id"]): chunk for chunk in prompt_chunks}
+    evidence: dict[str, object] = {}
+
+    for section in sections:
+        if section not in content:
+            continue
+        raw_section = raw_evidence.get(section)
+        if section == "summary":
+            evidence[section] = _evidence_entry(
+                raw_section, chunks_by_id, source_id, source_title
+            )
+            continue
+
+        items = content.get(section)
+        if not isinstance(items, list):
+            continue
+        entries = raw_section if isinstance(raw_section, list) else []
+        evidence[section] = [
+            _evidence_entry(
+                entries[index] if index < len(entries) else None,
+                chunks_by_id,
+                source_id,
+                source_title,
+            )
+            for index in range(len(items))
+        ]
+
+    content["_evidence"] = evidence
+    return content
+
+
 def _merge_content(
     existing: dict | None,
     new_content: dict,
@@ -207,6 +336,10 @@ def _merge_content(
 
     merged = dict(existing)
     meta = dict(merged.get("_meta", {}).get("sources", {}))
+    evidence = dict(merged.get("_evidence", {}))
+    new_evidence = new_content.get("_evidence", {})
+    if not isinstance(new_evidence, dict):
+        new_evidence = {}
 
     for section in sections:
         if section not in new_content:
@@ -235,12 +368,22 @@ def _merge_content(
                     meta[section] = [source_id]
             else:
                 meta[section] = [source_id]
+
+            old_evidence = evidence.get(section)
+            appended_evidence = new_evidence.get(section)
+            evidence[section] = (
+                (old_evidence if isinstance(old_evidence, list) else [])
+                + (appended_evidence if isinstance(appended_evidence, list) else [])
+            )
         else:
             # Replace or first-fill
             merged[section] = new_content[section]
             meta[section] = [source_id]
+            if section in new_evidence:
+                evidence[section] = new_evidence[section]
 
     merged["_meta"] = {"sources": meta}
+    merged["_evidence"] = evidence
     return merged
 
 
@@ -294,12 +437,17 @@ def run_generation_in_background(
     project_id: str,
     source_id: str,
     source_text: str,
+    source_title: str | None = None,
+    source_chunks: list[dict] | None = None,
     user_id: str | None = None,
     sections: list[str] | None = None,
     counts: dict | None = None,
     merge_mode: str = "skip",
 ):
     resolved_sections, resolved_counts = _resolve_sections_and_counts(sections, counts)
+    prompt_chunks = _prepare_prompt_chunks(source_id, source_text, source_chunks)
+    source_material = _format_source_material(prompt_chunks)
+    source_title = source_title or "Uploaded source"
 
     db = SessionLocal()
     try:
@@ -314,7 +462,7 @@ def run_generation_in_background(
 
         # ── Cache check ───────────────────────────────────────────────────────
         cache_key = _compute_cache_key(
-            source_text=source_text,
+            source_text=source_material,
             model=settings.OPENAI_MODEL,
             sections=resolved_sections,
             counts=resolved_counts,
@@ -343,7 +491,16 @@ def run_generation_in_background(
             logger.info("Cache hit: job=%s key=%.12s...", job_id, cache_key)
         else:
             try:
-                content_json, usage_info = _call_openai(source_text, resolved_sections, resolved_counts)
+                content_json, usage_info = _call_openai(
+                    source_material, resolved_sections, resolved_counts
+                )
+                content_json = _normalize_evidence(
+                    content_json,
+                    resolved_sections,
+                    source_id,
+                    source_title,
+                    prompt_chunks,
+                )
             except Exception as e:
                 logger.error("Generation failed: job=%s error=%s", job_id, e)
                 job.status = "failed"

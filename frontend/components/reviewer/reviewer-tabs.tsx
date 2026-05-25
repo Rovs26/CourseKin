@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { ReviewerContent } from "@/types/reviewer";
+import type { ReviewerContent, ReviewerFeedbackRating } from "@/types/reviewer";
+import { submitReviewerFeedback, type ReviewerSectionId } from "@/lib/coursekin-api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,14 +23,25 @@ export type ReviewerSectionKey =
 
 export function ReviewerTabs({
   content,
+  projectId,
   onRegenerateSection,
   isRegeneratingSection = false,
 }: {
   content: ReviewerContent;
+  projectId: string;
   onRegenerateSection?: (section: ReviewerSectionKey) => void;
   isRegeneratingSection?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<ReviewerSectionKey>("summary");
+  const recordFeedback = (
+    section: ReviewerSectionId,
+    itemIndex?: number
+  ) => (rating: ReviewerFeedbackRating) =>
+    submitReviewerFeedback(projectId, {
+      section,
+      item_index: itemIndex,
+      rating,
+    }).then(() => undefined);
 
   return (
     <Card className="rounded-2xl shadow-sm">
@@ -93,27 +105,51 @@ export function ReviewerTabs({
 
           <div className="p-4 md:p-6">
             <TabsContent value="summary">
-              <SummaryPanel summary={content.summary} />
+              <SummaryPanel
+                summary={content.summary}
+                evidence={content._evidence?.summary}
+                onFeedback={recordFeedback("summary")}
+              />
             </TabsContent>
 
             <TabsContent value="key-points">
-              <KeyPointsPanel keyPoints={content.key_points} />
+              <KeyPointsPanel
+                keyPoints={content.key_points}
+                evidence={content._evidence?.key_points}
+                onFeedback={(index, rating) => recordFeedback("key_points", index)(rating)}
+              />
             </TabsContent>
 
             <TabsContent value="definitions">
-              <DefinitionsPanel definitions={content.definitions} />
+              <DefinitionsPanel
+                definitions={content.definitions}
+                evidence={content._evidence?.definitions}
+                onFeedback={(index, rating) => recordFeedback("definitions", index)(rating)}
+              />
             </TabsContent>
 
             <TabsContent value="qa">
-              <QAPanel items={content.qa} />
+              <QAPanel
+                items={content.qa}
+                evidence={content._evidence?.qa}
+                onFeedback={(index, rating) => recordFeedback("qa", index)(rating)}
+              />
             </TabsContent>
 
             <TabsContent value="quiz">
-              <QuizPanel quiz={content.quiz} />
+              <QuizPanel
+                quiz={content.quiz}
+                evidence={content._evidence?.quiz}
+                onFeedback={(index, rating) => recordFeedback("quiz", index)(rating)}
+              />
             </TabsContent>
 
             <TabsContent value="flashcards">
-              <FlashcardsPanel cards={content.flashcards} />
+              <FlashcardsPanel
+                cards={content.flashcards}
+                evidence={content._evidence?.flashcards}
+                onFeedback={(index, rating) => recordFeedback("flashcards", index)(rating)}
+              />
             </TabsContent>
           </div>
         </Tabs>

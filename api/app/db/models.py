@@ -37,6 +37,18 @@ class Source(Base):
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
+class SourceChunk(Base):
+    __tablename__ = "source_chunks"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    source_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    project_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class Job(Base):
     __tablename__ = "jobs"
 
@@ -65,6 +77,31 @@ class Reviewer(Base):
     content_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[str | None] = mapped_column(String, nullable=True)
     updated_at: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class ReviewerFeedback(Base):
+    __tablename__ = "reviewer_feedback"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "project_id",
+            "reviewer_version",
+            "section",
+            "item_index",
+            name="uq_reviewer_feedback_item",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    reviewer_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    section: Mapped[str] = mapped_column(String, nullable=False)
+    item_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    rating: Mapped[str] = mapped_column(String, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class UsageLog(Base):

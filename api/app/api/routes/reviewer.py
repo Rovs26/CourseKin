@@ -9,7 +9,7 @@ from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import Project, Reviewer, Job, Source
+from app.db.models import Project, Reviewer, ReviewerFeedback, Job, Source
 from app.schemas.job import JobResponse
 from app.schemas.reviewer import (
     ReviewerResponse,
@@ -17,6 +17,8 @@ from app.schemas.reviewer import (
     BatchGenerateRequest,
     BatchGenerateResponse,
     CustomPdfRequest,
+    ReviewerFeedbackRequest,
+    ReviewerFeedbackResponse,
 )
 from app.services.generation_guard_service import require_generation_challenge
 from app.services.usage_service import (
@@ -113,6 +115,86 @@ def get_project_reviewer(
         }
 
     return _reviewer_to_dict(reviewer)
+
+
+@router.post(
+    "/projects/{project_id}/reviewer/feedback",
+    response_model=ReviewerFeedbackResponse,
+)
+@limiter.limit("120/hour")
+def record_reviewer_feedback(
+    request: Request,
+    project_id: str,
+    payload: ReviewerFeedbackRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
+
+    reviewer = db.get(Reviewer, project_id)
+    if not reviewer or not isinstance(reviewer.content_json, dict):
+        raise HTTPException(status_code=400, detail="No reviewer content to rate")
+
+    item_index = -1 if payload.section == "summary" else payload.item_index
+    if payload.section == "summary" and payload.item_index is not None:
+        raise HTTPException(status_code=400, detail="Summary feedback does not accept item_index")
+    if payload.section != "summary":
+        items = reviewer.content_json.get(payload.section)
+        if (
+            not isinstance(item_index, int)
+            or item_index < 0
+            or not isinstance(items, list)
+            or item_index >= len(items)
+        ):
+            raise HTTPException(status_code=400, detail="Feedback item does not exist")
+
+    feedback = (
+        db.query(ReviewerFeedback)
+        .filter(
+            ReviewerFeedback.user_id == current_user.user_id,
+            ReviewerFeedback.project_id == project_id,
+            ReviewerFeedback.reviewer_version == reviewer.version,
+            ReviewerFeedback.section == payload.section,
+            ReviewerFeedback.item_index == item_index,
+        )
+        .first()
+    )
+    now = utc_now_iso()
+    if feedback:
+        feedback.rating = payload.rating
+        feedback.comment = payload.comment
+        feedback.updated_at = now
+    else:
+        feedback = ReviewerFeedback(
+            id=str(uuid4()),
+            user_id=current_user.user_id,
+            project_id=project_id,
+            reviewer_version=reviewer.version,
+            section=payload.section,
+            item_index=item_index,
+            rating=payload.rating,
+            comment=payload.comment,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(feedback)
+
+    db.commit()
+    db.refresh(feedback)
+    return {
+        "id": feedback.id,
+        "project_id": feedback.project_id,
+        "reviewer_version": feedback.reviewer_version,
+        "section": feedback.section,
+        "item_index": None if feedback.item_index == -1 else feedback.item_index,
+        "rating": feedback.rating,
+        "comment": feedback.comment,
+        "created_at": feedback.created_at,
+        "updated_at": feedback.updated_at,
+    }
 
 
 @router.get("/projects/{project_id}/reviewer/export/pdf")

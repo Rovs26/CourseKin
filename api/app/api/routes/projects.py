@@ -9,7 +9,7 @@ from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import Project, Source, Job, Reviewer
+from app.db.models import Project, Source, SourceChunk, Job, Reviewer, ReviewerFeedback
 from app.services import storage_service
 from app.schemas.project import (
     ProjectCreate,
@@ -222,8 +222,10 @@ def delete_project(
                 path.unlink()
 
     # Cascade delete related records
+    db.query(SourceChunk).filter(SourceChunk.project_id == project_id).delete()
     db.query(Source).filter(Source.project_id == project_id).delete()
     db.query(Job).filter(Job.project_id == project_id).delete()
+    db.query(ReviewerFeedback).filter(ReviewerFeedback.project_id == project_id).delete()
     reviewer = db.get(Reviewer, project_id)
     if reviewer:
         db.delete(reviewer)

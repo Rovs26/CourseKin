@@ -3,19 +3,22 @@ from pathlib import Path
 from pypdf import PdfReader
 
 
-def extract_pdf_text(file_path: str) -> str:
+def extract_pdf_pages(file_path: str) -> list[tuple[int, str]]:
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"PDF file not found: {file_path}")
 
     reader = PdfReader(str(path))
-    parts: list[str] = []
+    pages: list[tuple[int, str]] = []
 
-    for page in reader.pages:
+    for page_number, page in enumerate(reader.pages, 1):
         text = page.extract_text() or ""
         text = text.strip()
         if text:
-            parts.append(text)
+            pages.append((page_number, text))
 
-    extracted = "\n\n".join(parts).strip()
-    return extracted
+    return pages
+
+
+def extract_pdf_text(file_path: str) -> str:
+    return "\n\n".join(text for _, text in extract_pdf_pages(file_path)).strip()

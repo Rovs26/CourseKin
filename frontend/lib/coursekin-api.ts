@@ -1,5 +1,5 @@
 import type { Project } from "@/types/project";
-import type { ReviewerOutput, ReviewerStatus } from "@/types/reviewer";
+import type { ReviewerFeedbackRating, ReviewerOutput, ReviewerStatus } from "@/types/reviewer";
 import type { Source } from "@/types/source";
 
 export const API_BASE_URL = (
@@ -323,6 +323,28 @@ export function getJob(jobId: string) {
 export function getReviewer(projectId: string) {
   return apiRequest<ReviewerOutput>(`/projects/${projectId}/reviewer`, {
     method: "GET",
+  });
+}
+
+export function submitReviewerFeedback(
+  projectId: string,
+  input: {
+    section: ReviewerSectionId;
+    item_index?: number;
+    rating: ReviewerFeedbackRating;
+    comment?: string;
+  }
+) {
+  return apiRequest<{
+    id: string;
+    project_id: string;
+    reviewer_version: number;
+    section: ReviewerSectionId;
+    item_index?: number | null;
+    rating: ReviewerFeedbackRating;
+  }>(`/projects/${projectId}/reviewer/feedback`, {
+    method: "POST",
+    body: JSON.stringify(input),
   });
 }
 

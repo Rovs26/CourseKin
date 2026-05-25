@@ -4,6 +4,8 @@ import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EvidenceCitations } from "@/components/reviewer/evidence-citations";
+import type { ReviewerEvidenceItem, ReviewerFeedbackRating } from "@/types/reviewer";
 
 interface QuizItem {
   question: string;
@@ -12,7 +14,15 @@ interface QuizItem {
   rationale: string;
 }
 
-export function QuizPanel({ quiz }: { quiz: QuizItem[] }) {
+export function QuizPanel({
+  quiz,
+  evidence,
+  onFeedback,
+}: {
+  quiz: QuizItem[];
+  evidence?: ReviewerEvidenceItem[];
+  onFeedback?: (index: number, rating: ReviewerFeedbackRating) => Promise<void>;
+}) {
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
 
   return (
@@ -67,6 +77,10 @@ export function QuizPanel({ quiz }: { quiz: QuizItem[] }) {
                     <p className="mt-1 text-sm leading-6 text-slate-600">
                       {item.rationale}
                     </p>
+                    <EvidenceCitations
+                      evidence={evidence?.[index]}
+                      onFeedback={onFeedback ? (rating) => onFeedback(index, rating) : undefined}
+                    />
                   </div>
                 </div>
               </div>

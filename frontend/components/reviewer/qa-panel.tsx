@@ -1,9 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EvidenceCitations } from "@/components/reviewer/evidence-citations";
+import type { ReviewerEvidenceItem, ReviewerFeedbackRating } from "@/types/reviewer";
 
 export function QAPanel({
   items,
+  evidence,
+  onFeedback,
 }: {
   items: { question: string; answer: string }[];
+  evidence?: ReviewerEvidenceItem[];
+  onFeedback?: (index: number, rating: ReviewerFeedbackRating) => Promise<void>;
 }) {
   return (
     <div className="space-y-4">
@@ -16,6 +22,10 @@ export function QAPanel({
           </CardHeader>
           <CardContent>
             <p className="text-sm leading-6 text-slate-700">{item.answer}</p>
+            <EvidenceCitations
+              evidence={evidence?.[index]}
+              onFeedback={onFeedback ? (rating) => onFeedback(index, rating) : undefined}
+            />
           </CardContent>
         </Card>
       ))}

@@ -1,3 +1,32 @@
+export type EvidenceStatus = "supported" | "weak_support" | "not_found";
+export type ReviewerFeedbackRating =
+  | "accurate"
+  | "unsupported"
+  | "unclear"
+  | "incorrect";
+
+export interface ReviewerCitation {
+  chunk_id: string;
+  source_id: string;
+  source_title: string;
+  page_number?: number | null;
+  excerpt: string;
+}
+
+export interface ReviewerEvidenceItem {
+  status: EvidenceStatus;
+  citations: ReviewerCitation[];
+}
+
+export interface ReviewerEvidence {
+  summary?: ReviewerEvidenceItem;
+  key_points?: ReviewerEvidenceItem[];
+  definitions?: ReviewerEvidenceItem[];
+  qa?: ReviewerEvidenceItem[];
+  quiz?: ReviewerEvidenceItem[];
+  flashcards?: ReviewerEvidenceItem[];
+}
+
 export interface ReviewerContent {
   summary: string;
   key_points: string[];
@@ -19,6 +48,10 @@ export interface ReviewerContent {
     front: string;
     back: string;
   }[];
+  _evidence?: ReviewerEvidence;
+  _meta?: {
+    sources?: Record<string, string | string[]>;
+  };
 }
 
 export type ReviewerStatus =
