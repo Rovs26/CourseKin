@@ -2,6 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Depends, Request
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser, get_current_user, require_owner
@@ -15,6 +16,7 @@ from app.schemas.project import (
     ProjectUpdate,
     ProjectResponse,
     ProjectListResponse,
+    ProjectSummaryListResponse,
 )
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
@@ -34,6 +36,21 @@ def _project_to_dict(project: Project):
         "created_at": project.created_at,
         "updated_at": project.updated_at,
     }
+
+
+def _coverage_percent(reviewer: Reviewer | None) -> int:
+    if reviewer is None or not isinstance(reviewer.content_json, dict):
+        return 0
+    content = reviewer.content_json
+    filled_sections = [
+        bool(content.get("summary")),
+        bool(content.get("key_points")),
+        bool(content.get("definitions")),
+        bool(content.get("qa")),
+        bool(content.get("quiz")),
+        bool(content.get("flashcards")),
+    ]
+    return round((sum(filled_sections) / len(filled_sections)) * 100)
 
 
 @router.post("", response_model=ProjectResponse)
@@ -77,6 +94,69 @@ def list_projects(
         .all()
     )
     return {"items": [_project_to_dict(item) for item in items], "total": len(items)}
+
+
+@router.get("/summaries", response_model=ProjectSummaryListResponse)
+@limiter.limit("120/hour")
+def list_project_summaries(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    projects = (
+        db.query(Project)
+        .filter(Project.user_id == current_user.user_id)
+        .order_by(Project.updated_at.desc())
+        .all()
+    )
+    project_ids = [project.id for project in projects]
+    if not project_ids:
+        return {"items": [], "total": 0}
+
+    source_stats = {
+        row.project_id: row
+        for row in (
+            db.query(
+                Source.project_id.label("project_id"),
+                func.count(Source.id).label("source_count"),
+                func.sum(case((Source.status == "processed", 1), else_=0)).label(
+                    "processed_source_count"
+                ),
+                func.max(Source.updated_at).label("last_source_at"),
+            )
+            .filter(Source.project_id.in_(project_ids))
+            .group_by(Source.project_id)
+            .all()
+        )
+    }
+
+    reviewers_by_project = {
+        reviewer.project_id: reviewer
+        for reviewer in db.query(Reviewer).filter(Reviewer.project_id.in_(project_ids)).all()
+    }
+
+    items = []
+    for project in projects:
+        stats = source_stats.get(project.id)
+        reviewer = reviewers_by_project.get(project.id)
+        activity_candidates = [project.updated_at, project.created_at]
+        if stats and stats.last_source_at:
+            activity_candidates.append(stats.last_source_at)
+        if reviewer and reviewer.updated_at:
+            activity_candidates.append(reviewer.updated_at)
+
+        items.append(
+            {
+                "project": _project_to_dict(project),
+                "source_count": int(stats.source_count) if stats else 0,
+                "processed_source_count": int(stats.processed_source_count or 0) if stats else 0,
+                "reviewer_status": reviewer.status if reviewer else "not-ready",
+                "reviewer_coverage_percent": _coverage_percent(reviewer),
+                "activity_at": max(activity_candidates),
+            }
+        )
+
+    return {"items": items, "total": len(items)}
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)

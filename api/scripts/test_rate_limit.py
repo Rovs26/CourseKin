@@ -1,8 +1,8 @@
 """Smoke-test for Phase 3 rate limiting.
 
 Tests:
-  1. user_or_ip_key returns "user:<sub>" when a Bearer JWT is present
-  2. user_or_ip_key returns "ip:<addr>" when no Bearer token is present
+  1. request_ip_key uses the source IP for authenticated requests
+  2. Fabricated bearer tokens cannot create separate limiter buckets
   3. A minimal FastAPI+slowapi app fires 429 after limit is hit and the
      response body has the friendly message format.
 
@@ -14,9 +14,8 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# ── Test 1 & 2: user_or_ip_key ────────────────────────────────────────────────
+# ── Test 1 & 2: request_ip_key ────────────────────────────────────────────────
 
-import jwt as pyjwt
 from unittest.mock import MagicMock
 
 
@@ -28,33 +27,23 @@ def make_mock_request(auth_header: str | None = None, ip: str = "1.2.3.4") -> Ma
 
 
 # Import after sys.path is set
-from app.core.rate_limit import user_or_ip_key
+from app.core.rate_limit import request_ip_key
 
-# Build a fake JWT with a known sub (no signature verification)
-fake_token = pyjwt.encode({"sub": "user_abc123", "email": "test@example.com"}, "secret", algorithm="HS256")
-
-mock_authed = make_mock_request(auth_header=f"Bearer {fake_token}")
-key_authed = user_or_ip_key(mock_authed)
-if key_authed == "user:user_abc123":
-    print("[PASS] Test 1: authed request keyed as user:user_abc123")
+mock_authed = make_mock_request(auth_header="Bearer signed-token", ip="10.0.0.1")
+key_authed = request_ip_key(mock_authed)
+if key_authed == "ip:10.0.0.1":
+    print("[PASS] Test 1: authenticated request is throttled by source IP")
 else:
-    print(f"[FAIL] Test 1: expected 'user:user_abc123', got '{key_authed}'")
+    print(f"[FAIL] Test 1: expected 'ip:10.0.0.1', got '{key_authed}'")
 
-mock_anon = make_mock_request(ip="10.0.0.1")
-key_anon = user_or_ip_key(mock_anon)
-if key_anon == "ip:10.0.0.1":
-    print("[PASS] Test 2: anon request keyed as ip:10.0.0.1")
+mock_forged_a = make_mock_request(auth_header="Bearer forged-a", ip="10.0.0.1")
+mock_forged_b = make_mock_request(auth_header="Bearer forged-b", ip="10.0.0.1")
+if request_ip_key(mock_forged_a) == request_ip_key(mock_forged_b) == "ip:10.0.0.1":
+    print("[PASS] Test 2: changing bearer tokens cannot evade the IP bucket")
 else:
-    print(f"[FAIL] Test 2: expected 'ip:10.0.0.1', got '{key_anon}'")
+    print("[FAIL] Test 2: bearer token changed the pre-authentication bucket")
 
-mock_bad_token = make_mock_request(auth_header="Bearer this.is.garbage")
-key_bad = user_or_ip_key(mock_bad_token)
-if key_bad.startswith("ip:"):
-    print(f"[PASS] Test 3: bad token falls back to IP keying ({key_bad})")
-else:
-    print(f"[FAIL] Test 3: bad token did not fall back to IP, got '{key_bad}'")
-
-# ── Test 4: 429 friendly message from a minimal app ──────────────────────────
+# ── Test 3: 429 friendly message from a minimal app ──────────────────────────
 
 import threading
 import time
@@ -111,15 +100,15 @@ for i in range(1, 5):
             body = e.read().decode()
             hit_429 = True
             if '"rate_limit_exceeded"' in body and "going a bit fast" in body and "retry_after_seconds" in body:
-                print(f"[PASS] Test 4: request {i} → 429 with correct friendly body")
+                print(f"[PASS] Test 3: request {i} → 429 with correct friendly body")
                 print(f"       Body: {body.strip()}")
             else:
-                print(f"[FAIL] Test 4: 429 body missing expected fields: {body}")
+                print(f"[FAIL] Test 3: 429 body missing expected fields: {body}")
     if status != 429 and i <= 3:
         pass  # expected success
 
 if not hit_429:
-    print("[FAIL] Test 4: never hit 429 after 4 requests at 3/minute limit")
+    print("[FAIL] Test 3: never hit 429 after 4 requests at 3/minute limit")
 
 server.should_exit = True
 time.sleep(1)

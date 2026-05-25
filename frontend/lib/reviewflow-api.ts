@@ -1,5 +1,5 @@
 import type { Project } from "@/types/project";
-import type { ReviewerOutput } from "@/types/reviewer";
+import type { ReviewerOutput, ReviewerStatus } from "@/types/reviewer";
 import type { Source } from "@/types/source";
 
 const API_BASE_URL = (
@@ -47,6 +47,15 @@ export interface Job {
 type ListResponse<T> = {
   items: T[];
   total: number;
+};
+
+export type ProjectSummary = {
+  project: Project;
+  source_count: number;
+  processed_source_count: number;
+  reviewer_status: ReviewerStatus;
+  reviewer_coverage_percent: number;
+  activity_at: string;
 };
 
 type CreateProjectInput = Omit<Project, "id" | "created_at" | "updated_at">;
@@ -181,6 +190,12 @@ export function listProjects() {
   });
 }
 
+export function listProjectSummaries() {
+  return apiRequest<ListResponse<ProjectSummary>>("/projects/summaries", {
+    method: "GET",
+  });
+}
+
 export function getProject(projectId: string) {
   return apiRequest<Project>(`/projects/${projectId}`, {
     method: "GET",
@@ -210,17 +225,6 @@ export function createTextSource(input: CreateTextSourceInput) {
   return apiRequest<Source>("/sources/text", {
     method: "POST",
     body: JSON.stringify(input),
-  });
-}
-
-/** @deprecated Old multipart upload — use presignAndUploadPDF instead */
-export function uploadPDFSource(projectId: string, file: File) {
-  const form = new FormData();
-  form.append("project_id", projectId);
-  form.append("file", file);
-  return apiRequest<Source>("/sources/upload", {
-    method: "POST",
-    body: form,
   });
 }
 
@@ -395,16 +399,6 @@ export function unbanUser(user_id: string) {
     method: "POST",
     body: JSON.stringify({ user_id }),
   });
-}
-
-// PDF Export
-
-export function getReviewerPdfUrl(projectId: string) {
-  return `${API_BASE_URL}/projects/${projectId}/reviewer/export/pdf`;
-}
-
-export function getReviewerPdfDownloadUrl(projectId: string) {
-  return `${API_BASE_URL}/projects/${projectId}/reviewer/download/pdf`;
 }
 
 export async function downloadCustomPdf(

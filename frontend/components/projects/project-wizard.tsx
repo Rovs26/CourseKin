@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { useMockProjects } from "@/hooks/use-mock-projects";
+import { createProject } from "@/lib/reviewflow-api";
 import { routes } from "@/lib/routes";
 import type {
   AgeBracket,
@@ -40,7 +40,6 @@ const steps = ["Basics", "Learning Setup", "Review Preferences"] as const;
 export function ProjectWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { addProject } = useMockProjects();
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -83,7 +82,7 @@ export function ProjectWizard() {
     setSubmitError(null);
 
     try {
-      const newProject = await addProject({
+      const newProject = await createProject({
         title: form.title.trim(),
         project_type: form.project_type as ProjectType,
         field_of_study: form.field_of_study.trim(),

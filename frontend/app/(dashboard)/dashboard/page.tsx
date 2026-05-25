@@ -7,13 +7,13 @@ import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { UsageOverview } from "@/components/dashboard/usage-overview";
 import { EmptyState } from "@/components/states/empty-state";
 import { useUser } from "@clerk/nextjs";
-import { useMockProjects } from "@/hooks/use-mock-projects";
+import { useProjectSummaries } from "@/hooks/use-project-summaries";
 import { routes } from "@/lib/routes";
 
 export default function DashboardPage() {
   const { user } = useUser();
-  const { projects, isReady } = useMockProjects();
-  const visibleProjects = isReady ? projects : [];
+  const { summaries, isLoading, error } = useProjectSummaries();
+  const visibleSummaries = summaries.slice(0, 3);
   const firstName = user?.firstName ?? "there";
 
   return (
@@ -35,10 +35,14 @@ export default function DashboardPage() {
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Recent Projects</h2>
 
-        {visibleProjects.length > 0 ? (
+        {isLoading ? (
+          <p className="text-sm text-slate-500">Loading projects...</p>
+        ) : error ? (
+          <EmptyState title="Unable to load projects" description={error} />
+        ) : visibleSummaries.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {visibleProjects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+            {visibleSummaries.map((summary) => (
+              <ProjectCard key={summary.project.id} summary={summary} />
             ))}
           </div>
         ) : (
@@ -50,8 +54,8 @@ export default function DashboardPage() {
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
-        <RecentActivity />
-        <UsageOverview />
+        <RecentActivity summaries={summaries} isLoading={isLoading} error={error} />
+        <UsageOverview summaries={summaries} isLoading={isLoading} error={error} />
       </div>
     </div>
   );

@@ -71,3 +71,17 @@ class ProjectResponse(BaseModel):
 class ProjectListResponse(BaseModel):
     items: list[ProjectResponse]
     total: int
+
+
+class ProjectSummaryResponse(BaseModel):
+    project: ProjectResponse
+    source_count: int
+    processed_source_count: int
+    reviewer_status: str
+    reviewer_coverage_percent: int
+    activity_at: str
+
+
+class ProjectSummaryListResponse(BaseModel):
+    items: list[ProjectSummaryResponse]
+    total: int

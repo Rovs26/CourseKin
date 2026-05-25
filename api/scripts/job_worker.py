@@ -11,7 +11,7 @@ logger = logging.getLogger("reviewflow.worker")
 
 
 def run(once: bool = False) -> None:
-    settings.validate_production()
+    settings.validate_deployment()
     while True:
         recovered = recover_stale_jobs()
         if recovered:

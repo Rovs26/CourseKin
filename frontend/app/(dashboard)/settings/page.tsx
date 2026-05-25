@@ -367,7 +367,7 @@ export default function SettingsPage() {
             <div className="rounded-xl border p-4">
               <p className="font-medium text-slate-900">Reviewer ready alerts</p>
               <p className="mt-1 text-xs text-slate-500">
-                Placeholder for later backend wiring
+                Coming later: email or in-app notification delivery.
               </p>
             </div>
             <div className="rounded-xl border p-4">
@@ -375,7 +375,7 @@ export default function SettingsPage() {
                 Source processing alerts
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Placeholder for later backend wiring
+                Coming later: processing-complete notification delivery.
               </p>
             </div>
           </CardContent>
@@ -398,7 +398,7 @@ export default function SettingsPage() {
                 Store workspace settings locally only
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Current settings are persisted in localStorage for mock mode.
+                Appearance and workspace preferences are stored only on this device.
               </p>
             </div>
           </CardContent>

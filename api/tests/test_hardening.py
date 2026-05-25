@@ -5,13 +5,14 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.routes import billing, sources
+from app.api.routes import billing, health, projects, sources
 from app.api.routes.admin import abuse_summary
 from app.core.auth import CurrentUser
 from app.core.config import settings
+from app.core.rate_limit import request_ip_key
 from app.core.utils import utc_now_iso
 from app.db.database import Base
-from app.db.models import Job, Project, Source, Subscription, UsageLog
+from app.db.models import Job, Project, Reviewer, Source, Subscription, UsageLog
 from app.services import job_queue_service
 from app.services.usage_service import record_usage, reserve_usage
 
@@ -71,6 +72,19 @@ def test_url_fetch_validates_redirect_destinations(monkeypatch):
         sources._fetch_public_url("https://public.example/start")
 
     assert calls == ["https://public.example/start", "http://127.0.0.1/internal"]
+
+
+def test_rate_limit_key_does_not_trust_unverified_bearer_subject():
+    first = MagicMock()
+    first.headers = {"Authorization": "Bearer forged-for-user-a"}
+    first.client.host = "203.0.113.5"
+
+    second = MagicMock()
+    second.headers = {"Authorization": "Bearer forged-for-user-b"}
+    second.client.host = "203.0.113.5"
+
+    assert request_ip_key(first) == "ip:203.0.113.5"
+    assert request_ip_key(first) == request_ip_key(second)
 
 
 def test_completed_usage_replaces_reserved_cost(db):
@@ -151,6 +165,70 @@ def test_worker_claims_queued_job(monkeypatch, db):
     assert captured["sections"] == ["summary"]
 
 
+def test_project_summaries_are_compact_and_user_scoped(db):
+    now = utc_now_iso()
+    db.add_all(
+        [
+            Project(
+                id="mine",
+                title="Biology",
+                project_type="school",
+                age_bracket="college",
+                learning_mode="deep",
+                field_of_study="Biology",
+                source_mode="source-only",
+                user_id="user-1",
+                created_at=now,
+                updated_at=now,
+            ),
+            Project(
+                id="other",
+                title="Private",
+                project_type="school",
+                age_bracket="college",
+                learning_mode="deep",
+                field_of_study="Private",
+                source_mode="source-only",
+                user_id="user-2",
+                created_at=now,
+                updated_at=now,
+            ),
+            Source(
+                id="source-mine",
+                project_id="mine",
+                title="Notes",
+                type="text",
+                status="processed",
+                text="notes",
+                created_at=now,
+                updated_at=now,
+            ),
+            Reviewer(
+                project_id="mine",
+                source_id="source-mine",
+                status="ready",
+                output_type="full-reviewer",
+                version=1,
+                content_json={"summary": "ready", "key_points": ["item"]},
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+    )
+    db.commit()
+
+    result = projects.list_project_summaries.__wrapped__(
+        MagicMock(), db, CurrentUser("user-1", "user@example.com", None, True)
+    )
+
+    assert result["total"] == 1
+    assert result["items"][0]["project"]["id"] == "mine"
+    assert result["items"][0]["source_count"] == 1
+    assert result["items"][0]["processed_source_count"] == 1
+    assert result["items"][0]["reviewer_status"] == "ready"
+    assert result["items"][0]["reviewer_coverage_percent"] == 33
+
+
 def test_polar_checkout_uses_products_contract(monkeypatch):
     captured = {}
 
@@ -209,4 +287,30 @@ def test_production_configuration_rejects_sqlite_without_safeguards(monkeypatch)
     monkeypatch.setattr(settings, "DATABASE_URL", "sqlite:///./data/reviewflow.db")
 
     with pytest.raises(RuntimeError, match="PostgreSQL DATABASE_URL"):
-        settings.validate_production()
+        settings.validate_deployment()
+
+
+def test_staging_configuration_rejects_sqlite_without_safeguards(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "staging")
+    monkeypatch.setattr(settings, "DATABASE_URL", "sqlite:///./data/reviewflow.db")
+
+    with pytest.raises(RuntimeError, match="PostgreSQL DATABASE_URL"):
+        settings.validate_deployment()
+
+
+def test_readiness_probe_checks_database(db):
+    result = health.ready(db)
+
+    assert result["status"] == "ready"
+    assert result["database"] == "ok"
+
+
+def test_readiness_probe_returns_service_unavailable_when_database_fails():
+    broken_db = MagicMock()
+    broken_db.execute.side_effect = RuntimeError("database offline")
+
+    with pytest.raises(HTTPException) as exc:
+        health.ready(broken_db)
+
+    assert exc.value.status_code == 503
+    assert exc.value.detail == "database_unavailable"

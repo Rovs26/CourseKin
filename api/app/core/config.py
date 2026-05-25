@@ -97,9 +97,13 @@ class Settings(BaseSettings):
     def is_postgres(self) -> bool:
         return self.DATABASE_URL.startswith("postgresql://") or self.DATABASE_URL.startswith("postgres://")
 
-    def validate_production(self) -> None:
-        """Fail startup rather than serving a production instance without safeguards."""
-        if self.APP_ENV != "production":
+    @property
+    def requires_deployment_safeguards(self) -> bool:
+        return self.APP_ENV in {"staging", "production"}
+
+    def validate_deployment(self) -> None:
+        """Fail startup rather than serving a deployed instance without safeguards."""
+        if not self.requires_deployment_safeguards:
             return
         required = {
             "PostgreSQL DATABASE_URL": self.is_postgres,
@@ -122,7 +126,7 @@ class Settings(BaseSettings):
             )
         missing = [name for name, configured in required.items() if not configured]
         if missing:
-            raise RuntimeError(f"Production configuration is incomplete: {', '.join(missing)}")
+            raise RuntimeError(f"{self.APP_ENV.title()} configuration is incomplete: {', '.join(missing)}")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

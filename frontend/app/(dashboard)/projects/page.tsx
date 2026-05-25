@@ -4,12 +4,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ProjectCard } from "@/components/dashboard/project-card";
 import { EmptyState } from "@/components/states/empty-state";
-import { useMockProjects } from "@/hooks/use-mock-projects";
+import { useProjectSummaries } from "@/hooks/use-project-summaries";
 import { routes } from "@/lib/routes";
 
 export default function ProjectsPage() {
-  const { projects, isReady } = useMockProjects();
-  const visibleProjects = isReady ? projects : [];
+  const { summaries, isLoading, error } = useProjectSummaries();
 
   return (
     <div className="space-y-6">
@@ -28,10 +27,14 @@ export default function ProjectsPage() {
         </Button>
       </div>
 
-      {visibleProjects.length > 0 ? (
+      {isLoading ? (
+        <p className="text-sm text-slate-500">Loading projects...</p>
+      ) : error ? (
+        <EmptyState title="Unable to load projects" description={error} />
+      ) : summaries.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibleProjects.map((project) => (
-            <ProjectCard key={project.id} project={project} />
+          {summaries.map((summary) => (
+            <ProjectCard key={summary.project.id} summary={summary} />
           ))}
         </div>
       ) : (

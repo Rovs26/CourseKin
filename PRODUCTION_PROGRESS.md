@@ -240,3 +240,20 @@ Commit SHA:
 [x] Correct admin failure aggregation and add enforceable CI test coverage
 [x] Fail production startup when required Postgres/auth/R2/Turnstile/shared limiter variables are absent
 [ ] Live acceptance: R2 upload, Clerk deletion, Polar sandbox/live webhook flow, Redis, worker restart recovery, backup restore
+
+## v1 Release Gate — Production-readiness continuation
+[x] Replace pre-authentication JWT-claim rate-limit bucketing with IP request throttling so fabricated tokens cannot bypass limiter buckets
+[x] Preserve verified per-user daily and monthly generation quotas for model-spend enforcement
+[x] Add a compact authenticated project summary endpoint for dashboard usage, activity, and project cards
+[x] Remove dashboard request fan-out that loaded source/reviewer state separately in multiple widgets
+[x] Remove obsolete mock-mode naming and retired frontend API helper paths from active production UI
+[x] Run local test, limiter smoke-test, lint, and production-build verification for this gate
+[ ] Complete live provider and infrastructure acceptance checks in staging
+
+## v1 Release Gate — Deployable staging preparation
+[x] Define a dedicated staging boundary for API, worker, database, uploads, auth, bot protection, Redis, and observability
+[x] Enforce deployment safeguards for both `APP_ENV=staging` and `APP_ENV=production`
+[x] Add `/ready` database-connectivity verification separate from liveness health checks
+[x] Add a non-mutating staging smoke script with optional authenticated read verification
+[x] Verify the staging smoke command locally against temporary ReviewFlow API and frontend servers
+[ ] Provision isolated staging services and run the staged smoke and provider acceptance workflows

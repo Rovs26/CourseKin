@@ -2,8 +2,21 @@
 
 ## Environments
 - Production: api.reviewflow.app (Railway) + reviewflow.app (Vercel)
-- Staging: (Vercel preview deployments against Neon dev branch — no dedicated staging env)
+- Staging: api-staging.reviewflow.app (Railway API + worker) + a Vercel preview or staging domain, using separate staging provider data
 - Local dev: docker-compose in `docker/docker-compose.yml`
+
+### Staging boundary
+
+Do not connect preview testing to production data or production uploads. Before enabling real user traffic, provision:
+
+- A Railway staging API service and a Railway staging generation worker.
+- A Neon staging/dev branch for `DATABASE_URL`.
+- A dedicated `reviewflow-staging-uploads` R2 bucket with the same temporary-object lifecycle policy as production.
+- Clerk development or staging keys and a Turnstile staging widget.
+- A staging Redis instance or isolated Redis database for distributed limiter verification.
+- Staging Axiom/Sentry labeling or datasets so acceptance-test noise is distinguishable from production.
+
+Use `APP_ENV=staging` on the staging API and worker. Both `staging` and `production` boot modes enforce Postgres, Clerk, R2, Turnstile, and shared rate-limit configuration; a partially configured deployed service should fail fast.
 
 ---
 
@@ -17,7 +30,7 @@ In `APP_ENV=production`, the API and worker intentionally refuse to boot with SQ
 ```
 # Core
 APP_NAME=ReviewFlow API
-APP_ENV=production
+APP_ENV=production                 # use staging for the isolated staging API/worker
 DATABASE_URL=postgresql://...         # Neon connection string (pooled)
 FRONTEND_URL=https://reviewflow.app
 
@@ -70,6 +83,8 @@ R2_BUCKET_NAME=reviewflow-uploads
 R2_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
 R2_PRESIGN_EXPIRY_SECONDS=300
 ```
+
+`RATE_LIMIT_STORAGE_URI` backs request throttling shared across API replicas. Request throttling is keyed by client IP because it runs before JWT verification; generation limits and cost quotas are additionally enforced by verified Clerk user ID after authentication.
 
 ### Generation worker service (Railway — separate service, same project)
 
@@ -157,7 +172,7 @@ alembic downgrade -1
 - **Production DB**: Neon `main` branch
 - **Staging DB**: Neon `dev` branch (kept in sync with `main` schema)
 
-Preview deploys use the `dev` branch. To test a destructive migration safely:
+The staging API and any frontend preview configured for acceptance testing use the `dev` branch. To test a destructive migration safely:
 1. Create a new Neon branch from `main`
 2. Point `DATABASE_URL` at the new branch
 3. Run `alembic upgrade head` and verify
@@ -173,6 +188,37 @@ Preview deploys use the `dev` branch. To test a destructive migration safely:
 4. **Review** — test the preview URL, smoke-test the happy path.
 5. **Merge to `master`** — Vercel auto-deploys frontend to production. Railway auto-deploys API to production.
 6. **Migrations** — Railway's CMD runs `alembic upgrade head` before starting uvicorn. If a migration fails, the deploy fails and Railway keeps the previous version serving traffic.
+
+---
+
+## Staging smoke checks
+
+The API exposes separate probes:
+
+- `/health` is a lightweight liveness endpoint used by Railway.
+- `/ready` additionally confirms database connectivity and is required before acceptance testing.
+
+After deploying the isolated staging API, worker, and frontend, run:
+
+```bash
+cd api
+python -m scripts.staging_smoke \
+  --api-url https://api-staging.reviewflow.app \
+  --frontend-url https://<staging-frontend-domain> \
+  --expected-env staging
+```
+
+For the authenticated read check, create or sign into a staging-only test account, obtain a short-lived Clerk token, and pass it through an environment variable rather than a shell argument:
+
+```bash
+REVIEWFLOW_SMOKE_BEARER_TOKEN="<short-lived-staging-token>" \
+python -m scripts.staging_smoke \
+  --api-url https://api-staging.reviewflow.app \
+  --frontend-url https://<staging-frontend-domain> \
+  --expected-env staging
+```
+
+This smoke script does not create, edit, upload, generate, or delete data. Complete the authenticated upload/generation/deletion workflow manually during provider acceptance testing.
 
 ---
 

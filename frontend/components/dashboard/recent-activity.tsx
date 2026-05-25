@@ -1,7 +1,5 @@
-"use client";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useProjectSummaries } from "@/hooks/use-project-summaries";
+import type { ProjectSummary } from "@/lib/reviewflow-api";
 
 function formatDate(iso?: string) {
   if (!iso) {
@@ -27,9 +25,15 @@ function formatDate(iso?: string) {
   return `${months[Number(month) - 1]} ${Number(day)}, ${year}`;
 }
 
-export function RecentActivity() {
-  const { summaries, isLoading, error } = useProjectSummaries();
-
+export function RecentActivity({
+  summaries,
+  isLoading,
+  error,
+}: {
+  summaries: ProjectSummary[];
+  isLoading: boolean;
+  error: string | null;
+}) {
   if (isLoading) {
     return (
       <Card className="rounded-2xl shadow-sm">
@@ -57,24 +61,24 @@ export function RecentActivity() {
   }
 
   const activities = [...summaries]
-    .sort((a, b) => b.activityAt.localeCompare(a.activityAt))
+    .sort((a, b) => b.activity_at.localeCompare(a.activity_at))
     .slice(0, 4)
     .map((summary) => {
       let detail = "Project created";
 
-      if (summary.reviewer.status === "stale") {
+      if (summary.reviewer_status === "stale") {
         detail = "Reviewer needs refresh";
-      } else if (summary.reviewer.status === "ready") {
+      } else if (summary.reviewer_status === "ready") {
         detail = "Reviewer ready";
-      } else if (summary.sourceCount > 0) {
-        detail = `${summary.sourceCount} source${summary.sourceCount === 1 ? "" : "s"} added`;
+      } else if (summary.source_count > 0) {
+        detail = `${summary.source_count} source${summary.source_count === 1 ? "" : "s"} added`;
       }
 
       return {
         id: summary.project.id,
         title: summary.project.title,
         detail,
-        time: formatDate(summary.activityAt),
+        time: formatDate(summary.activity_at),
       };
     });
 

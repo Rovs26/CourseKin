@@ -19,10 +19,10 @@ from app.db import models  # noqa: F401 — imported so SQLAlchemy registers all
 # ── Logging ──────────────────────────────────────────────────────────
 setup_logging()
 logger = logging.getLogger("reviewflow")
-settings.validate_production()
+settings.validate_deployment()
 
 # ── Sentry ───────────────────────────────────────────────────────────
-if settings.SENTRY_DSN_API and settings.APP_ENV == "production":
+if settings.SENTRY_DSN_API and settings.requires_deployment_safeguards:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN_API,
         integrations=[StarletteIntegration(), FastApiIntegration()],

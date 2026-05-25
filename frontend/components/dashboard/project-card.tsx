@@ -11,9 +11,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { useProjectSummary } from "@/hooks/use-project-summary";
+import type { ProjectSummary } from "@/lib/reviewflow-api";
 import { cn } from "@/lib/utils";
-import type { Project } from "@/types/project";
 
 const reviewerStatusStyles = {
   ready: "bg-emerald-100 text-emerald-700",
@@ -46,29 +45,8 @@ function formatDate(iso?: string) {
   return `${months[Number(month) - 1]} ${Number(day)}, ${year}`;
 }
 
-export function ProjectCard({ project }: { project: Project }) {
-  const { sourceCount, reviewer, coveragePercent, isLoading, error } =
-    useProjectSummary(project.id);
-
-  if (isLoading) {
-    return (
-      <Card className="rounded-2xl border-0 shadow-sm ring-1 ring-slate-200/70">
-        <CardContent className="p-6">
-          <p className="text-sm text-slate-500">Loading project...</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card className="rounded-2xl border-0 shadow-sm ring-1 ring-slate-200/70">
-        <CardContent className="p-6">
-          <p className="text-sm text-rose-600">{error}</p>
-        </CardContent>
-      </Card>
-    );
-  }
+export function ProjectCard({ summary }: { summary: ProjectSummary }) {
+  const { project } = summary;
 
   return (
     <Card className="rounded-2xl border-0 shadow-sm ring-1 ring-slate-200/70">
@@ -95,14 +73,14 @@ export function ProjectCard({ project }: { project: Project }) {
           <span
             className={cn(
               "rounded-full px-2.5 py-1 text-xs font-medium capitalize",
-              reviewerStatusStyles[reviewer.status]
+              reviewerStatusStyles[summary.reviewer_status]
             )}
           >
-            {reviewer.status.replace("-", " ")}
+            {summary.reviewer_status.replace("-", " ")}
           </span>
 
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-            {sourceCount} source{sourceCount === 1 ? "" : "s"}
+            {summary.source_count} source{summary.source_count === 1 ? "" : "s"}
           </span>
         </div>
       </CardHeader>
@@ -111,9 +89,11 @@ export function ProjectCard({ project }: { project: Project }) {
         <div>
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="text-slate-500">Reviewer coverage</span>
-            <span className="font-medium text-slate-900">{coveragePercent}%</span>
+            <span className="font-medium text-slate-900">
+              {summary.reviewer_coverage_percent}%
+            </span>
           </div>
-          <Progress value={coveragePercent} className="h-2" />
+          <Progress value={summary.reviewer_coverage_percent} className="h-2" />
         </div>
 
         <div className="flex flex-wrap gap-2 text-xs">

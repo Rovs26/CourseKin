@@ -1,12 +1,16 @@
-"use client";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { useProjectSummaries } from "@/hooks/use-project-summaries";
+import type { ProjectSummary } from "@/lib/reviewflow-api";
 
-export function UsageOverview() {
-  const { projects, summaries, isLoading, error } = useProjectSummaries();
-
+export function UsageOverview({
+  summaries,
+  isLoading,
+  error,
+}: {
+  summaries: ProjectSummary[];
+  isLoading: boolean;
+  error: string | null;
+}) {
   if (isLoading) {
     return (
       <Card className="rounded-2xl shadow-sm">
@@ -33,21 +37,22 @@ export function UsageOverview() {
     );
   }
 
-  const totalProjects = projects.length;
+  const totalProjects = summaries.length;
   const projectCap = 30;
   const usagePercent = Math.min(100, Math.round((totalProjects / projectCap) * 100));
 
-  const allSources = summaries.flatMap((summary) => summary.sources);
-  const processedSources = allSources.filter(
-    (source) => source.status === "processed"
-  ).length;
+  const totalSources = summaries.reduce((total, summary) => total + summary.source_count, 0);
+  const processedSources = summaries.reduce(
+    (total, summary) => total + summary.processed_source_count,
+    0
+  );
 
   const readyReviewers = summaries.filter(
-    (summary) => summary.reviewer.status === "ready"
+    (summary) => summary.reviewer_status === "ready"
   ).length;
 
   const staleReviewers = summaries.filter(
-    (summary) => summary.reviewer.status === "stale"
+    (summary) => summary.reviewer_status === "stale"
   ).length;
 
   return (
@@ -73,7 +78,7 @@ export function UsageOverview() {
         <div className="grid grid-cols-3 gap-3 text-sm">
           <div className="rounded-2xl bg-slate-50 p-3">
             <p className="text-slate-500">Sources</p>
-            <p className="mt-1 font-semibold text-slate-900">{allSources.length}</p>
+            <p className="mt-1 font-semibold text-slate-900">{totalSources}</p>
           </div>
 
           <div className="rounded-2xl bg-slate-50 p-3">
