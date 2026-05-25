@@ -2,12 +2,12 @@ import type { Project } from "@/types/project";
 import type { ReviewerOutput, ReviewerStatus } from "@/types/reviewer";
 import type { Source } from "@/types/source";
 
-const API_BASE_URL = (
+export const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
   process.env.NEXT_PUBLIC_COURSEKIN_API_URL ??
   process.env.NEXT_PUBLIC_REVIEWFLOW_API_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  "http://localhost:8000"
+  "/api"
 ).replace(/\/+$/, "");
 
 // ── Auth token injection ───────────────────────────────────────────────────────

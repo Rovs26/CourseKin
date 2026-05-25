@@ -6,9 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Zap, CheckCircle, CreditCard } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-const API_BASE =
-  (process.env.NEXT_PUBLIC_COURSEKIN_API_URL ?? process.env.NEXT_PUBLIC_REVIEWFLOW_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+import { API_BASE_URL } from "@/lib/coursekin-api";
 const BILLING_ENABLED = process.env.NEXT_PUBLIC_BILLING_ENABLED === "true";
 
 type SubscriptionData = {
@@ -58,7 +56,7 @@ function BillingContent() {
     async function load() {
       try {
         const token = await getToken();
-        const res = await fetch(`${API_BASE}/billing/subscription`, {
+        const res = await fetch(`${API_BASE_URL}/billing/subscription`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error(`Failed to load subscription (${res.status})`);
@@ -75,7 +73,7 @@ function BillingContent() {
     setCheckoutError(null);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_BASE}/billing/checkout`, {
+      const res = await fetch(`${API_BASE_URL}/billing/checkout`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

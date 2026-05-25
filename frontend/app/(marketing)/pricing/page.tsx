@@ -67,11 +67,11 @@ export default function PricingPage() {
         </Card>
 
         {/* Plus Monthly */}
-        <Card className="rounded-2xl shadow-sm ring-1 ring-amber-200 md:col-span-1">
+        <Card className="rounded-2xl shadow-sm ring-1 ring-[var(--ck-primary-border)] md:col-span-1">
           <CardHeader>
             <div className="flex items-center gap-2">
               <CardTitle className="text-xl text-slate-900">Plus Monthly</CardTitle>
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--ck-accent-soft)] px-2 py-0.5 text-xs font-medium text-[var(--ck-ink)]">
                 <Zap className="h-3 w-3" /> Popular
               </span>
             </div>
@@ -85,13 +85,13 @@ export default function PricingPage() {
             <ul className="space-y-2.5">
               {PLUS_FEATURES.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-slate-600">
-                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ck-primary)]" />
                   {f}
                 </li>
               ))}
             </ul>
             <Link href="/sign-up">
-              <Button className="w-full rounded-xl bg-amber-500 text-white hover:bg-amber-600">
+              <Button className="w-full rounded-xl">
                 Upgrade to Plus
               </Button>
             </Link>
@@ -99,11 +99,11 @@ export default function PricingPage() {
         </Card>
 
         {/* Plus Yearly */}
-        <Card className="rounded-2xl shadow-sm ring-2 ring-amber-400 md:col-span-1">
+        <Card className="rounded-2xl shadow-sm ring-2 ring-[var(--ck-accent)] md:col-span-1">
           <CardHeader>
             <div className="flex items-center gap-2">
               <CardTitle className="text-xl text-slate-900">Plus Yearly</CardTitle>
-              <span className="inline-flex items-center rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white">
+              <span className="inline-flex items-center rounded-full bg-[var(--ck-accent)] px-2 py-0.5 text-xs font-semibold text-[var(--ck-ink)]">
                 Save 44%
               </span>
             </div>
@@ -119,13 +119,13 @@ export default function PricingPage() {
             <ul className="space-y-2.5">
               {PLUS_FEATURES.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-slate-600">
-                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ck-primary)]" />
                   {f}
                 </li>
               ))}
             </ul>
             <Link href="/sign-up">
-              <Button className="w-full rounded-xl bg-amber-500 text-white hover:bg-amber-600">
+              <Button className="w-full rounded-xl">
                 Upgrade to Plus Yearly
               </Button>
             </Link>

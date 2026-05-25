@@ -12,8 +12,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build-time env vars (override via --build-arg)
-ARG NEXT_PUBLIC_COURSEKIN_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_COURSEKIN_API_URL=$NEXT_PUBLIC_COURSEKIN_API_URL
+ARG COURSEKIN_API_UPSTREAM_URL=http://api:8000
+ENV COURSEKIN_API_UPSTREAM_URL=$COURSEKIN_API_UPSTREAM_URL
+ENV NEXT_PUBLIC_API_BASE_URL=/api
 
 RUN npm run build
 

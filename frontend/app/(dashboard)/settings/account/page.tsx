@@ -5,9 +5,7 @@ import { useAuth, useClerk } from "@clerk/nextjs";
 import { Download, Trash2, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-const API_BASE =
-  (process.env.NEXT_PUBLIC_COURSEKIN_API_URL ?? process.env.NEXT_PUBLIC_REVIEWFLOW_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+import { API_BASE_URL } from "@/lib/coursekin-api";
 
 export default function AccountPage() {
   const { getToken } = useAuth();
@@ -25,7 +23,7 @@ export default function AccountPage() {
     setExportError(null);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_BASE}/users/me/export`, {
+      const res = await fetch(`${API_BASE_URL}/users/me/export`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -52,7 +50,7 @@ export default function AccountPage() {
     setDeleteError(null);
     try {
       const token = await getToken();
-      const res = await fetch(`${API_BASE}/users/me`, {
+      const res = await fetch(`${API_BASE_URL}/users/me`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

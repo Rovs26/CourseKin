@@ -261,6 +261,8 @@ Commit SHA:
 ## Brand Transition - CourseKin
 [x] Record CourseKin as the working v2 product name in the roadmap
 [x] Update public UI, generated exports, API display text, and operational copy to CourseKin
-[x] Introduce `NEXT_PUBLIC_COURSEKIN_API_URL` while preserving legacy frontend variable fallback
+[x] Preserve legacy API URL fallbacks while moving new CourseKin setups to the same-origin proxy
+[x] Establish initial CourseKin color tokens and apply them to public and shared application surfaces
+[x] Standardize browser API requests behind the same-origin `/api` proxy with a server-side upstream URL
 [ ] Acquire and verify the production domain and provision the `@coursekin.app` mailboxes before launch
 [ ] Complete formal trademark and handle clearance before public branding investment

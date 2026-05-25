@@ -51,7 +51,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/dashboard"
+      afterSignOutUrl="/"
+    >
       <html lang="en" suppressHydrationWarning className={inter.variable}>
         <body className="min-h-screen font-sans antialiased">
           <script dangerouslySetInnerHTML={{ __html: themeScript }} />

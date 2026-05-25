@@ -14,9 +14,9 @@ function Badge({
     <div
       className={cn(
         "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors",
-        variant === "default" && "bg-slate-900 text-white",
-        variant === "secondary" && "bg-slate-100 text-slate-700",
-        variant === "outline" && "border border-slate-200 text-slate-700",
+        variant === "default" && "bg-[var(--ck-primary)] text-white",
+        variant === "secondary" && "bg-[var(--ck-primary-soft)] text-[var(--ck-primary)]",
+        variant === "outline" && "border border-[var(--ck-primary-border)] text-[var(--ck-primary)]",
         className
       )}
       {...props}

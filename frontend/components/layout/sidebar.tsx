@@ -29,11 +29,11 @@ export function Sidebar() {
   const { signOut } = useClerk();
 
   return (
-    <aside className="hidden border-r bg-slate-900 text-white lg:flex lg:flex-col">
+    <aside className="hidden border-r border-white/10 bg-[var(--ck-ink)] text-white lg:flex lg:flex-col">
       <div className="flex h-16 items-center border-b border-white/10 px-6">
         <Link href={routes.dashboard} className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-sm font-bold text-slate-900">
-            R
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--ck-primary)] text-xs font-bold tracking-tight text-white">
+            CK
           </div>
           <p className="text-lg font-semibold tracking-tight">CourseKin</p>
         </Link>
@@ -52,8 +52,8 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition",
                 active
-                  ? "bg-white/10 text-white"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white"
+                  ? "bg-[var(--ck-primary)] text-white"
+                  : "text-slate-300 hover:bg-white/10 hover:text-white"
               )}
             >
               <Icon className="h-4 w-4" />
@@ -66,7 +66,7 @@ export function Sidebar() {
       <div className="border-t border-white/10 p-4">
         <button
           onClick={() => signOut({ redirectUrl: "/" })}
-          className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white"
+          className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white"
         >
           <LogOut className="h-4 w-4" />
           Log Out

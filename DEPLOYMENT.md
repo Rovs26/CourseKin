@@ -131,7 +131,8 @@ Use Node.js 20.19 or newer. Paste the following into Vercel → your project →
 
 ```
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
-NEXT_PUBLIC_COURSEKIN_API_URL=https://api.coursekin.app
+NEXT_PUBLIC_API_BASE_URL=/api
+COURSEKIN_API_UPSTREAM_URL=https://api.coursekin.app
 NEXT_PUBLIC_BILLING_ENABLED=false
 NEXT_PUBLIC_APP_ENV=production
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
@@ -141,6 +142,8 @@ NEXT_PUBLIC_SENTRY_DSN=https://...@sentry.io/...
 SENTRY_AUTH_TOKEN=sntrys_...
 SENTRY_ORG=your-sentry-org
 ```
+
+The frontend browser calls the same-origin `/api` path. Next.js forwards those requests to `COURSEKIN_API_UPSTREAM_URL`, keeping browser API behavior consistent between local development and deployment and avoiding unnecessary cross-origin billing or account requests.
 
 Switch both `BILLING_ENABLED` and `NEXT_PUBLIC_BILLING_ENABLED` to `true` only after the Polar acceptance tests in the launch checklist pass.
 

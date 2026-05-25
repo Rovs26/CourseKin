@@ -3,7 +3,7 @@ import { Topbar } from "@/components/layout/topbar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[var(--rf-shell-bg)] transition-colors">
+    <div className="min-h-screen bg-[var(--ck-shell-bg)] transition-colors">
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[260px_1fr]">
         <Sidebar />
         <div className="flex min-w-0 flex-col">

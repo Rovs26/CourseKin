@@ -13,9 +13,9 @@ export function Topbar() {
   const userInitial = userName.charAt(0).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
+    <header className="sticky top-0 z-20 border-b border-[var(--rf-border)] bg-white/90 backdrop-blur">
       <div className="flex h-14 items-center justify-between px-4 md:px-6 lg:px-8">
-        <p className="text-sm font-medium text-slate-500">
+        <p className="text-sm font-semibold tracking-tight text-[var(--ck-primary)]">
           CourseKin
         </p>
 
@@ -24,7 +24,7 @@ export function Topbar() {
             asChild
             variant="ghost"
             size="icon"
-            className="text-slate-500 hover:text-slate-900"
+            className="text-slate-500 hover:text-[var(--ck-primary)]"
           >
             <Link href={routes.settings}>
               <Settings className="h-4 w-4" />
@@ -41,7 +41,7 @@ export function Topbar() {
               className="h-8 w-8 rounded-full object-cover"
             />
           ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-700">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ck-primary-soft)] text-sm font-medium text-[var(--ck-primary)]">
               {userInitial}
             </div>
           )}
