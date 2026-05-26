@@ -95,7 +95,7 @@ export default function ProjectOverviewPage() {
     <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
       <Card className="rounded-2xl shadow-sm">
         <CardHeader>
-          <CardTitle className="text-slate-900">Project Snapshot</CardTitle>
+          <CardTitle className="text-slate-900">Course Snapshot</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-2xl bg-slate-50 p-4">
@@ -130,6 +130,18 @@ export default function ProjectOverviewPage() {
               {project.source_mode.replace("-", " ")}
             </p>
           </div>
+          {project.course_code && (
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <p className="text-sm text-slate-500">Course Code</p>
+              <p className="mt-1 font-semibold text-slate-900">{project.course_code}</p>
+            </div>
+          )}
+          {project.term && (
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <p className="text-sm text-slate-500">Term</p>
+              <p className="mt-1 font-semibold text-slate-900">{project.term}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -180,6 +192,9 @@ export default function ProjectOverviewPage() {
           <CardTitle className="text-slate-900">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3">
+          <Button asChild>
+            <Link href={`/projects/${project.id}/planning`}>Open Course Plan</Link>
+          </Button>
           <Button asChild>
             <Link href={`/projects/${project.id}/reviewer`}>Open Reviewer</Link>
           </Button>

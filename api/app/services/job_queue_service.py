@@ -6,6 +6,7 @@ from app.core.utils import utc_now_iso
 from app.db.database import SessionLocal
 from app.db.models import Job, Source
 from app.services.generation_service import run_generation_in_background
+from app.services.planning_service import run_syllabus_extraction_in_background
 from app.services.source_chunk_service import ensure_source_chunks, serialize_chunks
 from app.services.usage_service import release_reserved_cost
 
@@ -78,6 +79,7 @@ def process_next_queued_job() -> bool:
         job_id = job.id
         project_id = job.project_id
         source_id = source.id
+        job_type = job.job_type
         user_id = job.user_id
         source_text = source.text or ""
         source_title = source.title
@@ -85,6 +87,16 @@ def process_next_queued_job() -> bool:
         db.commit()
     finally:
         db.close()
+
+    if job_type == "extract-syllabus":
+        run_syllabus_extraction_in_background(
+            job_id=job_id,
+            project_id=project_id,
+            source_id=source_id,
+            source_text=source_text,
+            user_id=user_id,
+        )
+        return True
 
     run_generation_in_background(
         job_id=job_id,

@@ -17,6 +17,11 @@ export function ProjectHeader({
         </h1>
 
         <div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-500">
+          {project.course_code && (
+            <span className="rounded-full bg-[var(--ck-primary-soft)] px-3 py-1 font-medium text-[var(--ck-primary)]">
+              {project.course_code}
+            </span>
+          )}
           <span className="rounded-full bg-slate-100 px-3 py-1 capitalize">
             {project.project_type}
           </span>
@@ -32,10 +37,18 @@ export function ProjectHeader({
           <span className="rounded-full bg-slate-200 px-3 py-1 text-slate-700">
             {sourceCount} source{sourceCount === 1 ? "" : "s"}
           </span>
+          {project.term && (
+            <span className="rounded-full bg-slate-100 px-3 py-1">
+              {project.term}
+            </span>
+          )}
         </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
+        <Button asChild variant="outline">
+          <Link href={`/projects/${project.id}/planning`}>Course Plan</Link>
+        </Button>
         <Button asChild variant="outline">
           <Link href={`/projects/${project.id}/sources`}>Manage Sources</Link>
         </Button>

@@ -35,7 +35,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
 
 const VALID_TEMPLATES = new Set(Object.keys(TEMPLATE_LABELS));
 
-const steps = ["Basics", "Learning Setup", "Review Preferences"] as const;
+const steps = ["Course Basics", "Learning Setup", "Review Preferences"] as const;
 
 export function ProjectWizard() {
   const router = useRouter();
@@ -54,6 +54,10 @@ export function ProjectWizard() {
     age_bracket: "",
     learning_mode: "",
     source_mode: "",
+    course_code: "",
+    term: "",
+    instructor: "",
+    meeting_schedule: "",
   });
 
   const progress = ((step + 1) / steps.length) * 100;
@@ -90,6 +94,10 @@ export function ProjectWizard() {
         learning_mode: form.learning_mode as LearningMode,
         source_mode: form.source_mode as SourceMode,
         template_id: templateId,
+        course_code: form.course_code.trim() || null,
+        term: form.term.trim() || null,
+        instructor: form.instructor.trim() || null,
+        meeting_schedule: form.meeting_schedule.trim() || null,
       });
 
       router.push(routes.projectOverview(newProject.id));
@@ -105,10 +113,10 @@ export function ProjectWizard() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-          Create New Project
+          Create Course Workspace
         </h1>
         <p className="mt-2 text-sm text-slate-500">
-          Set up a structured reviewer workspace with the right study configuration.
+          Set up one course for sources, reviewer generation, and semester planning.
         </p>
       </div>
 
@@ -142,11 +150,11 @@ export function ProjectWizard() {
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="project-name" className="text-slate-900">
-                  Project Name
+                  Course Name
                 </Label>
                 <Input
                   id="project-name"
-                  placeholder="World History Review"
+                  placeholder="Organic Chemistry I"
                   value={form.title}
                   onChange={(e) => updateField("title", e.target.value)}
                   className="text-slate-900 placeholder:text-slate-400"
@@ -154,7 +162,7 @@ export function ProjectWizard() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-slate-900">Project Type</Label>
+                <Label className="text-slate-900">Workspace Type</Label>
                 <Select
                   value={form.project_type}
                   onValueChange={(value) => updateField("project_type", value)}
@@ -163,7 +171,7 @@ export function ProjectWizard() {
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="school">School</SelectItem>
+                    <SelectItem value="school">University Course</SelectItem>
                     <SelectItem value="exam">Exam</SelectItem>
                     <SelectItem value="teacher">Teacher</SelectItem>
                     <SelectItem value="personal">Personal</SelectItem>
@@ -181,6 +189,43 @@ export function ProjectWizard() {
                   className="text-slate-900 placeholder:text-slate-400"
                 />
               </div>
+
+              {form.project_type === "school" && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-slate-900">Course Code</Label>
+                    <Input
+                      placeholder="CHEM 101"
+                      value={form.course_code}
+                      onChange={(e) => updateField("course_code", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-slate-900">Term</Label>
+                    <Input
+                      placeholder="First Semester 2026-2027"
+                      value={form.term}
+                      onChange={(e) => updateField("term", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-slate-900">Instructor</Label>
+                    <Input
+                      placeholder="Prof. Santos"
+                      value={form.instructor}
+                      onChange={(e) => updateField("instructor", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-slate-900">Class Schedule</Label>
+                    <Input
+                      placeholder="Mon/Wed 10:00 AM - 11:30 AM"
+                      value={form.meeting_schedule}
+                      onChange={(e) => updateField("meeting_schedule", e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -256,7 +301,7 @@ export function ProjectWizard() {
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       <div className="rounded-xl bg-white p-3">
                         <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Project Name
+                          Course Name
                         </p>
                         <p className="mt-1 font-medium text-slate-900">
                           {form.title || "Not set"}
@@ -265,7 +310,7 @@ export function ProjectWizard() {
 
                       <div className="rounded-xl bg-white p-3">
                         <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Project Type
+                          Workspace Type
                         </p>
                         <p className="mt-1 font-medium capitalize text-slate-900">
                           {form.project_type || "Not set"}
@@ -280,6 +325,14 @@ export function ProjectWizard() {
                           {form.age_bracket ? form.age_bracket.replace("-", " ") : "Not set"}
                         </p>
                       </div>
+                      {form.project_type === "school" && form.term && (
+                        <div className="rounded-xl bg-white p-3">
+                          <p className="text-xs uppercase tracking-wide text-slate-400">
+                            Term
+                          </p>
+                          <p className="mt-1 font-medium text-slate-900">{form.term}</p>
+                        </div>
+                      )}
 
                       <div className="rounded-xl bg-white p-3">
                         <p className="text-xs uppercase tracking-wide text-slate-400">

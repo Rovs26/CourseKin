@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { File, FileText, Globe, Link2, Sparkles, Trash2 } from "lucide-react";
 import { SourceStatusBadge } from "@/components/sources/source-status-badge";
-import { deleteSource } from "@/lib/coursekin-api";
-import type { Source } from "@/types/source";
+import { deleteSource, updateSourcePurpose } from "@/lib/coursekin-api";
+import type { Source, SourcePurpose } from "@/types/source";
 
 const iconMap = {
   pdf: FileText,
@@ -11,18 +11,28 @@ const iconMap = {
   file: File,
 } as const;
 
+const purposeLabels = {
+  study_material: "Study material",
+  syllabus: "Syllabus",
+  lecture_notes: "Lecture notes",
+  assignment_brief: "Assignment brief",
+} as const;
+
 export function SourceList({
   sources,
   onGenerateFromSource,
   onSourceDeleted,
   isGenerating = false,
+  allowPurposeEditing = false,
 }: {
   sources: Source[];
   onGenerateFromSource?: (source: Source) => void;
   onSourceDeleted?: () => void;
   isGenerating?: boolean;
+  allowPurposeEditing?: boolean;
 }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const handleDelete = async (source: Source) => {
     if (deletingId) return;
@@ -34,6 +44,16 @@ export function SourceList({
       // Silently fail — source may have already been deleted
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handlePurposeChange = async (source: Source, purpose: SourcePurpose) => {
+    setUpdatingId(source.id);
+    try {
+      await updateSourcePurpose(source.id, purpose);
+      onSourceDeleted?.();
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -54,7 +74,7 @@ export function SourceList({
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-slate-900">{source.title}</p>
                 <p className="mt-1 text-xs uppercase tracking-wide text-slate-400">
-                  {source.type}
+                  {source.type} - {purposeLabels[source.purpose]}
                 </p>
               </div>
 
@@ -82,6 +102,19 @@ export function SourceList({
                 </button>
               )}
             </div>
+            {allowPurposeEditing && (
+              <select
+                value={source.purpose}
+                disabled={updatingId === source.id}
+                onChange={(event) => handlePurposeChange(source, event.target.value as SourcePurpose)}
+                className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600"
+                aria-label={`Material type for ${source.title}`}
+              >
+                {Object.entries(purposeLabels).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            )}
           </div>
         );
       })}

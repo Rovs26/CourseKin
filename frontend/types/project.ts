@@ -36,6 +36,10 @@ export interface Project {
   field_of_study: string;
   source_mode: SourceMode;
   template_id?: TemplateId | null;
+  course_code?: string | null;
+  term?: string | null;
+  instructor?: string | null;
+  meeting_schedule?: string | null;
   created_at: string;
   updated_at?: string;
 }

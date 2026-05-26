@@ -17,6 +17,7 @@ from app.core.utils import utc_now_iso
 from app.db.database import get_db
 from app.api.routes.billing import revoke_polar_subscription
 from app.db.models import (
+    CourseObligation,
     GenerationCache,
     Job,
     Project,
@@ -75,6 +76,13 @@ def export_my_data(
         if project_ids else []
     )
 
+    course_obligations = (
+        db.execute(
+            select(CourseObligation).where(CourseObligation.project_id.in_(project_ids))
+        ).scalars().all()
+        if project_ids else []
+    )
+
     jobs = (
         db.execute(
             select(Job).where(Job.project_id.in_(project_ids))
@@ -115,6 +123,10 @@ def export_my_data(
             "field_of_study": p.field_of_study,
             "source_mode": p.source_mode,
             "template_id": p.template_id,
+            "course_code": p.course_code,
+            "term": p.term,
+            "instructor": p.instructor,
+            "meeting_schedule": p.meeting_schedule,
             "created_at": p.created_at,
             "updated_at": p.updated_at,
         }
@@ -126,6 +138,7 @@ def export_my_data(
             "title": s.title,
             "type": s.type,
             "status": s.status,
+            "purpose": s.purpose,
             "url": s.url,
             "file_name": s.file_name,
             "text": s.text,
@@ -164,6 +177,23 @@ def export_my_data(
             "page_number": chunk.page_number,
             "text": chunk.text,
             "created_at": chunk.created_at,
+        }
+
+    def obligation_to_dict(obligation: CourseObligation) -> dict:
+        return {
+            "id": obligation.id,
+            "project_id": obligation.project_id,
+            "source_id": obligation.source_id,
+            "title": obligation.title,
+            "obligation_type": obligation.obligation_type,
+            "due_date": obligation.due_date,
+            "details": obligation.details,
+            "grading_criteria": obligation.grading_criteria,
+            "confidence": obligation.confidence,
+            "uncertain_fields": obligation.uncertain_fields,
+            "status": obligation.status,
+            "created_at": obligation.created_at,
+            "updated_at": obligation.updated_at,
         }
 
     def reviewer_to_dict(r: Reviewer) -> dict:
@@ -254,6 +284,10 @@ def export_my_data(
             json.dumps([chunk_to_dict(chunk) for chunk in source_chunks], indent=2),
         )
         zf.writestr(
+            "course_obligations.json",
+            json.dumps([obligation_to_dict(item) for item in course_obligations], indent=2),
+        )
+        zf.writestr(
             "jobs.json",
             json.dumps([job_to_dict(j) for j in jobs], indent=2),
         )
@@ -333,6 +367,11 @@ def delete_my_account(
         db.execute(
             ReviewerFeedback.__table__.delete().where(
                 ReviewerFeedback.project_id.in_(project_ids)
+            )
+        )
+        db.execute(
+            CourseObligation.__table__.delete().where(
+                CourseObligation.project_id.in_(project_ids)
             )
         )
         db.execute(

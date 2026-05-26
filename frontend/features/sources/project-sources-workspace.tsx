@@ -7,6 +7,7 @@ import { SourceList } from "@/components/sources/source-list";
 import { createTextSource, presignAndUploadPDF, createURLSource } from "@/lib/coursekin-api";
 import { useProject } from "@/hooks/use-project";
 import { useSources } from "@/hooks/use-sources";
+import type { SourcePurpose } from "@/types/source";
 
 export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
   const { project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
@@ -25,7 +26,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
 
   const isLoading = isProjectLoading || isSourcesLoading;
 
-  const handleAddText = async (text: string) => {
+  const handleAddText = async (text: string, purpose: SourcePurpose) => {
     if (!project || isSubmittingText) {
       return;
     }
@@ -45,6 +46,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
         title,
         text: normalizedText,
         content: normalizedText,
+        purpose,
       });
 
       await refetchSources();
@@ -57,7 +59,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
     }
   };
 
-  const handleAddPdf = async (file: File) => {
+  const handleAddPdf = async (file: File, purpose: SourcePurpose) => {
     if (!project || isSubmittingPdf) {
       return;
     }
@@ -70,7 +72,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
     const title = file.name.replace(/\.pdf$/i, "").trim() || file.name;
 
     try {
-      await presignAndUploadPDF(projectId, file, title, (pct) => {
+      await presignAndUploadPDF(projectId, file, title, purpose, (pct) => {
         setPdfUploadPct(pct);
       });
       await refetchSources();
@@ -84,7 +86,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
     }
   };
 
-  const handleAddUrl = async (url: string) => {
+  const handleAddUrl = async (url: string, purpose: SourcePurpose) => {
     if (!project || isSubmittingUrl) {
       return;
     }
@@ -97,6 +99,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
         project_id: projectId,
         title: url,
         url,
+        purpose,
       });
       await refetchSources();
     } catch (err) {
@@ -175,7 +178,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
 
         <div className="mt-4">
           {sources.length > 0 ? (
-            <SourceList sources={sources} />
+            <SourceList sources={sources} onSourceDeleted={refetchSources} allowPurposeEditing />
           ) : (
             <EmptyState
               title="No sources yet"

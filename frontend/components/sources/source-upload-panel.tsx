@@ -7,18 +7,28 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { SourcePurpose } from "@/types/source";
 
 export function SourceUploadPanel({
   onAddPdf,
   onAddUrl,
   onAddText,
 }: {
-  onAddPdf?: (file: File) => void;
-  onAddUrl?: (url: string) => void;
-  onAddText?: (text: string) => void;
+  onAddPdf?: (file: File, purpose: SourcePurpose) => void;
+  onAddUrl?: (url: string, purpose: SourcePurpose) => void;
+  onAddText?: (text: string, purpose: SourcePurpose) => void;
 }) {
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
+  const [purpose, setPurpose] = useState<SourcePurpose>("study_material");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const submitUrl = () => {
@@ -28,7 +38,7 @@ export function SourceUploadPanel({
       return;
     }
 
-    onAddUrl?.(value);
+    onAddUrl?.(value, purpose);
     setUrl("");
   };
 
@@ -39,7 +49,7 @@ export function SourceUploadPanel({
       return;
     }
 
-    onAddText?.(value);
+    onAddText?.(value, purpose);
     setText("");
   };
 
@@ -50,7 +60,7 @@ export function SourceUploadPanel({
       return;
     }
 
-    onAddPdf?.(file);
+    onAddPdf?.(file, purpose);
     event.target.value = "";
   };
 
@@ -60,6 +70,25 @@ export function SourceUploadPanel({
         <CardTitle className="text-slate-900 dark:text-slate-100">Add Source</CardTitle>
       </CardHeader>
       <CardContent>
+        <div className="mb-5 space-y-2">
+          <Label>What kind of course material is this?</Label>
+          <Select value={purpose} onValueChange={(value) => setPurpose(value as SourcePurpose)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="study_material">Study material</SelectItem>
+              <SelectItem value="syllabus">Course syllabus</SelectItem>
+              <SelectItem value="lecture_notes">Lecture notes</SelectItem>
+              <SelectItem value="assignment_brief">Assignment brief</SelectItem>
+            </SelectContent>
+          </Select>
+          {purpose === "syllabus" && (
+            <p className="text-xs text-[var(--ck-primary)]">
+              CourseKin can propose deadlines from this syllabus in the Planning tab.
+            </p>
+          )}
+        </div>
         <Tabs defaultValue="pdf" className="space-y-4">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="pdf">PDF</TabsTrigger>

@@ -48,7 +48,13 @@ export default function TermsPage() {
             <p className="mt-3">
               CourseKin is a study tool that generates structured review materials (summaries, key
               points, definitions, Q&amp;A, quizzes, and flashcards) from content you provide.
-              Content generation is powered by third-party AI models (currently OpenAI).
+              It may also extract proposed assessments and due dates from a syllabus for your
+              review. Content generation and extraction are powered by third-party AI models
+              (currently OpenAI).
+            </p>
+            <p className="mt-3">
+              Extracted course obligations are proposals only. You must review and confirm them
+              before using a generated calendar file or relying on a deadline.
             </p>
           </section>
 

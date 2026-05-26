@@ -9,6 +9,7 @@ export const routes = {
   projectOverview: (projectId: string) => `/projects/${projectId}`,
   projectReviewer: (projectId: string) => `/projects/${projectId}/reviewer`,
   projectSources: (projectId: string) => `/projects/${projectId}/sources`,
+  projectPlanning: (projectId: string) => `/projects/${projectId}/planning`,
   projectSettings: (projectId: string) => `/projects/${projectId}/settings`,
   projectExport: (projectId: string) => `/projects/${projectId}/reviewer/export`,
 };

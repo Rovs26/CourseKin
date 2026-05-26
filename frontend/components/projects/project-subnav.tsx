@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const items = [
   { key: "overview", label: "Overview", href: (id: string) => `/projects/${id}` },
   { key: "sources", label: "Sources", href: (id: string) => `/projects/${id}/sources` },
+  { key: "planning", label: "Planning", href: (id: string) => `/projects/${id}/planning` },
   { key: "reviewer", label: "Reviewer", href: (id: string) => `/projects/${id}/reviewer` },
   { key: "settings", label: "Settings", href: (id: string) => `/projects/${id}/settings` },
 ];

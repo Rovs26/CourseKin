@@ -168,6 +168,65 @@ def test_worker_claims_queued_job(monkeypatch, db):
     assert db.query(SourceChunk).filter(SourceChunk.source_id == "source-1").count() == 1
 
 
+def test_worker_routes_syllabus_extraction_jobs(monkeypatch, db):
+    now = utc_now_iso()
+    db.add(
+        Project(
+            id="course-1",
+            title="Course",
+            project_type="school",
+            age_bracket="college",
+            learning_mode="deep",
+            field_of_study="Biology",
+            source_mode="source-only",
+            user_id="user-1",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.add(
+        Source(
+            id="syllabus-1",
+            project_id="course-1",
+            title="Syllabus",
+            type="text",
+            purpose="syllabus",
+            status="processed",
+            text="Midterm exam: 2026-09-03",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.add(
+        Job(
+            id="job-plan-1",
+            project_id="course-1",
+            source_id="syllabus-1",
+            user_id="user-1",
+            job_type="extract-syllabus",
+            status="queued",
+            stage="queued",
+            attempts=0,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.commit()
+
+    session_factory = sessionmaker(bind=db.bind)
+    captured = {}
+    monkeypatch.setattr(job_queue_service, "SessionLocal", session_factory)
+    monkeypatch.setattr(
+        job_queue_service,
+        "run_syllabus_extraction_in_background",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    assert job_queue_service.process_next_queued_job() is True
+    assert captured["job_id"] == "job-plan-1"
+    assert captured["source_id"] == "syllabus-1"
+
+
 def test_project_summaries_are_compact_and_user_scoped(db):
     now = utc_now_iso()
     db.add_all(

@@ -13,7 +13,7 @@ from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import Project, Source, SourceChunk
+from app.db.models import CourseObligation, Project, Source, SourceChunk
 from app.schemas.source import (
     PresignUploadRequest,
     FinalizeUploadRequest,
@@ -21,6 +21,7 @@ from app.schemas.source import (
     SourceUrlCreate,
     SourceResponse,
     SourceListResponse,
+    SourcePurposeUpdate,
 )
 from app.core.security import validate_url_safe
 from app.services import storage_service
@@ -63,6 +64,7 @@ def _source_to_dict(source: Source):
         "title": source.title,
         "type": source.type,
         "status": source.status,
+        "purpose": source.purpose,
         "created_at": source.created_at,
         "updated_at": source.updated_at,
     }
@@ -118,6 +120,7 @@ def create_text_source(
         type="text",
         status="processed" if text_content.strip() else "uploaded",
         text=payload.text,
+        purpose=payload.purpose,
         created_at=now,
         updated_at=now,
     )
@@ -187,6 +190,7 @@ def create_url_source(
         status="processed",
         url=url_str,
         text=extracted_text,
+        purpose=payload.purpose,
         created_at=now,
         updated_at=now,
     )
@@ -294,6 +298,7 @@ def finalize_upload(
         status="processed",
         storage_key=final_storage_key,
         text=extracted_text,
+        purpose=payload.purpose,
         created_at=now,
         updated_at=now,
     )
@@ -342,6 +347,28 @@ def get_source(
     return _source_to_dict(source)
 
 
+@router.patch("/sources/{source_id}/purpose", response_model=SourceResponse)
+@limiter.limit("30/hour")
+def update_source_purpose(
+    request: Request,
+    source_id: str,
+    payload: SourcePurposeUpdate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    source = db.get(Source, source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    project = db.get(Project, source.project_id)
+    require_owner(current_user, project.user_id if project else None)
+
+    source.purpose = payload.purpose
+    source.updated_at = utc_now_iso()
+    db.commit()
+    db.refresh(source)
+    return _source_to_dict(source)
+
+
 @router.delete("/sources/{source_id}")
 @limiter.limit("30/hour")
 def delete_source(
@@ -367,6 +394,7 @@ def delete_source(
         if path.exists():
             path.unlink()
 
+    db.query(CourseObligation).filter(CourseObligation.source_id == source_id).delete()
     db.query(SourceChunk).filter(SourceChunk.source_id == source_id).delete()
     db.delete(source)
     db.commit()

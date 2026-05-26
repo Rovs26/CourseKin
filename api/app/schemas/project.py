@@ -10,6 +10,10 @@ class ProjectCreate(BaseModel):
     field_of_study: str
     source_mode: str
     template_id: Optional[str] = None
+    course_code: Optional[str] = None
+    term: Optional[str] = None
+    instructor: Optional[str] = None
+    meeting_schedule: Optional[str] = None
     # user_id is set server-side from the Clerk JWT — not accepted from the request body
 
     @field_validator("title")
@@ -32,6 +36,18 @@ class ProjectCreate(BaseModel):
             raise ValueError("Field must be 200 characters or fewer")
         return v
 
+    @field_validator("course_code", "term", "instructor", "meeting_schedule")
+    @classmethod
+    def validate_optional_course_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        value = v.strip()
+        if not value:
+            return None
+        if len(value) > 500:
+            raise ValueError("Course field must be 500 characters or fewer")
+        return value
+
 
 class ProjectUpdate(BaseModel):
     title: Optional[str] = None
@@ -41,6 +57,10 @@ class ProjectUpdate(BaseModel):
     field_of_study: Optional[str] = None
     source_mode: Optional[str] = None
     template_id: Optional[str] = None
+    course_code: Optional[str] = None
+    term: Optional[str] = None
+    instructor: Optional[str] = None
+    meeting_schedule: Optional[str] = None
 
     @field_validator("title")
     @classmethod
@@ -53,6 +73,18 @@ class ProjectUpdate(BaseModel):
                 raise ValueError("Title must be 200 characters or fewer")
         return v
 
+    @field_validator("course_code", "term", "instructor", "meeting_schedule")
+    @classmethod
+    def validate_optional_course_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        value = v.strip()
+        if not value:
+            return None
+        if len(value) > 500:
+            raise ValueError("Course field must be 500 characters or fewer")
+        return value
+
 
 class ProjectResponse(BaseModel):
     id: str
@@ -63,6 +95,10 @@ class ProjectResponse(BaseModel):
     field_of_study: str
     source_mode: str
     template_id: Optional[str] = None
+    course_code: Optional[str] = None
+    term: Optional[str] = None
+    instructor: Optional[str] = None
+    meeting_schedule: Optional[str] = None
     user_id: Optional[str] = None
     created_at: str
     updated_at: str

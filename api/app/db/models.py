@@ -15,6 +15,10 @@ class Project(Base):
     field_of_study: Mapped[str] = mapped_column(String, nullable=False)
     source_mode: Mapped[str] = mapped_column(String, nullable=False)
     template_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    course_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    term: Mapped[str | None] = mapped_column(String, nullable=True)
+    instructor: Mapped[str | None] = mapped_column(String, nullable=True)
+    meeting_schedule: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
@@ -33,6 +37,7 @@ class Source(Base):
     file_name: Mapped[str | None] = mapped_column(String, nullable=True)
     file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     storage_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    purpose: Mapped[str] = mapped_column(String, nullable=False, default="study_material")
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -100,6 +105,24 @@ class ReviewerFeedback(Base):
     item_index: Mapped[int] = mapped_column(Integer, nullable=False)
     rating: Mapped[str] = mapped_column(String, nullable=False)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class CourseObligation(Base):
+    __tablename__ = "course_obligations"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    obligation_type: Mapped[str] = mapped_column(String, nullable=False)
+    due_date: Mapped[str | None] = mapped_column(String, nullable=True)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    grading_criteria: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confidence: Mapped[str] = mapped_column(String, nullable=False)
+    uncertain_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 

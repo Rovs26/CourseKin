@@ -1,4 +1,9 @@
+from typing import Literal
+
 from pydantic import BaseModel, HttpUrl, field_validator, model_validator
+
+
+SourcePurpose = Literal["study_material", "syllabus", "lecture_notes", "assignment_brief"]
 
 
 class SourceTextCreate(BaseModel):
@@ -6,6 +11,7 @@ class SourceTextCreate(BaseModel):
     title: str
     text: str | None = None
     content: str | None = None
+    purpose: SourcePurpose = "study_material"
 
     @field_validator("title")
     @classmethod
@@ -30,6 +36,7 @@ class SourceUrlCreate(BaseModel):
     project_id: str
     title: str
     url: HttpUrl
+    purpose: SourcePurpose = "study_material"
 
     @field_validator("title")
     @classmethod
@@ -77,6 +84,7 @@ class FinalizeUploadRequest(BaseModel):
     project_id: str
     storage_key: str
     title: str
+    purpose: SourcePurpose = "study_material"
 
     @field_validator("title")
     @classmethod
@@ -103,6 +111,7 @@ class SourceResponse(BaseModel):
     title: str
     type: str
     status: str
+    purpose: SourcePurpose = "study_material"
     created_at: str
     updated_at: str
 
@@ -110,3 +119,7 @@ class SourceResponse(BaseModel):
 class SourceListResponse(BaseModel):
     items: list[SourceResponse]
     total: int
+
+
+class SourcePurposeUpdate(BaseModel):
+    purpose: SourcePurpose

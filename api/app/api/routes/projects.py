@@ -9,7 +9,15 @@ from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import Project, Source, SourceChunk, Job, Reviewer, ReviewerFeedback
+from app.db.models import (
+    CourseObligation,
+    Job,
+    Project,
+    Reviewer,
+    ReviewerFeedback,
+    Source,
+    SourceChunk,
+)
 from app.services import storage_service
 from app.schemas.project import (
     ProjectCreate,
@@ -32,6 +40,10 @@ def _project_to_dict(project: Project):
         "field_of_study": project.field_of_study,
         "source_mode": project.source_mode,
         "template_id": project.template_id,
+        "course_code": project.course_code,
+        "term": project.term,
+        "instructor": project.instructor,
+        "meeting_schedule": project.meeting_schedule,
         "user_id": project.user_id,
         "created_at": project.created_at,
         "updated_at": project.updated_at,
@@ -71,6 +83,10 @@ def create_project(
         field_of_study=payload.field_of_study,
         source_mode=payload.source_mode,
         template_id=payload.template_id,
+        course_code=payload.course_code,
+        term=payload.term,
+        instructor=payload.instructor,
+        meeting_schedule=payload.meeting_schedule,
         user_id=current_user.user_id,  # always from verified JWT, never from body
         created_at=now,
         updated_at=now,
@@ -226,6 +242,7 @@ def delete_project(
     db.query(Source).filter(Source.project_id == project_id).delete()
     db.query(Job).filter(Job.project_id == project_id).delete()
     db.query(ReviewerFeedback).filter(ReviewerFeedback.project_id == project_id).delete()
+    db.query(CourseObligation).filter(CourseObligation.project_id == project_id).delete()
     reviewer = db.get(Reviewer, project_id)
     if reviewer:
         db.delete(reviewer)

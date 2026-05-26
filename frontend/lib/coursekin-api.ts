@@ -1,6 +1,6 @@
 import type { Project } from "@/types/project";
 import type { ReviewerFeedbackRating, ReviewerOutput, ReviewerStatus } from "@/types/reviewer";
-import type { Source } from "@/types/source";
+import type { Source, SourcePurpose } from "@/types/source";
 
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ??
@@ -66,12 +66,14 @@ type CreateTextSourceInput = {
   title: string;
   text?: string;
   content?: string;
+  purpose?: SourcePurpose;
 };
 
 type CreateUrlSourceInput = {
   project_id: string;
   title: string;
   url: string;
+  purpose?: SourcePurpose;
 };
 
 export type ReviewerSectionId =
@@ -130,6 +132,33 @@ export type BatchGenerateResult = {
   total_sources: number;
   status: string;
   job_ids: string[];
+};
+
+export type ObligationType =
+  | "quiz"
+  | "exam"
+  | "assignment"
+  | "project"
+  | "paper"
+  | "reading"
+  | "other";
+
+export type ObligationStatus = "proposed" | "confirmed" | "dismissed";
+
+export type CourseObligation = {
+  id: string;
+  project_id: string;
+  source_id: string;
+  title: string;
+  obligation_type: ObligationType;
+  due_date: string | null;
+  details: string | null;
+  grading_criteria: string | null;
+  confidence: "high" | "medium" | "low";
+  uncertain_fields: string[];
+  status: ObligationStatus;
+  created_at: string;
+  updated_at: string;
 };
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -210,6 +239,16 @@ export function createProject(input: CreateProjectInput) {
   });
 }
 
+export function updateProject(
+  projectId: string,
+  input: Partial<Omit<Project, "id" | "created_at" | "updated_at">>
+) {
+  return apiRequest<Project>(`/projects/${projectId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
 export function deleteProject(projectId: string) {
   return apiRequest<{ message: string }>(`/projects/${projectId}`, {
     method: "DELETE",
@@ -247,6 +286,7 @@ export async function presignAndUploadPDF(
   projectId: string,
   file: File,
   title: string,
+  purpose: SourcePurpose = "study_material",
   onProgress?: (pct: number) => void,
 ): Promise<Source> {
   // Step 1: get presigned URL
@@ -290,6 +330,7 @@ export async function presignAndUploadPDF(
       project_id: projectId,
       storage_key: presign.key,
       title,
+      purpose,
     }),
   });
 }
@@ -305,6 +346,62 @@ export function deleteSource(sourceId: string) {
   return apiRequest<{ message: string }>(`/sources/${sourceId}`, {
     method: "DELETE",
   });
+}
+
+export function updateSourcePurpose(sourceId: string, purpose: SourcePurpose) {
+  return apiRequest<Source>(`/sources/${sourceId}/purpose`, {
+    method: "PATCH",
+    body: JSON.stringify({ purpose }),
+  });
+}
+
+export function listCourseObligations(projectId: string) {
+  return apiRequest<ListResponse<CourseObligation>>(`/projects/${projectId}/planning/obligations`, {
+    method: "GET",
+  });
+}
+
+export function extractSyllabusObligations(
+  projectId: string,
+  sourceId: string,
+  turnstileToken?: string
+) {
+  return apiRequest<Job>(`/projects/${projectId}/planning/extract-syllabus`, {
+    method: "POST",
+    body: JSON.stringify({ source_id: sourceId, turnstile_token: turnstileToken }),
+  });
+}
+
+export function reviewCourseObligation(
+  projectId: string,
+  obligationId: string,
+  input: {
+    title: string;
+    obligation_type: ObligationType;
+    due_date?: string | null;
+    details?: string | null;
+    grading_criteria?: string | null;
+    status: "confirmed" | "dismissed";
+  }
+) {
+  return apiRequest<CourseObligation>(
+    `/projects/${projectId}/planning/obligations/${obligationId}`,
+    { method: "PATCH", body: JSON.stringify(input) }
+  );
+}
+
+export async function downloadConfirmedCalendar(projectId: string): Promise<Blob> {
+  const headers = new Headers();
+  if (_getToken) {
+    const token = await _getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+  }
+  const response = await fetch(`${API_BASE_URL}/projects/${projectId}/planning/calendar.ics`, {
+    method: "GET",
+    headers,
+  });
+  if (!response.ok) throw new Error("Failed to export confirmed deadlines.");
+  return response.blob();
 }
 
 export function generateReviewerJob(input: GenerateReviewerInput) {

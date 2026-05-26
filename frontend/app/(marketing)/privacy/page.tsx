@@ -34,6 +34,11 @@ export default function PrivacyPage() {
                 derived from that content.
               </li>
               <li>
+                <strong>Course planning information:</strong> Optional course code, academic term,
+                instructor, class schedule, syllabus-derived assessment proposals, your corrections,
+                and deadlines you confirm for calendar export.
+              </li>
+              <li>
                 <strong>Technical data:</strong> IP address, browser user agent, timestamps of
                 requests, API response times, and error logs. This data is used for security,
                 abuse prevention, and service reliability.
@@ -50,7 +55,8 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold text-slate-900">2. How We Use Your Data</h2>
             <ul className="mt-3 list-disc space-y-1 pl-5">
               <li>To generate study materials from your uploaded content.</li>
-              <li>To store your projects and generated output so you can access them later.</li>
+              <li>To store your course workspaces, proposed obligations, confirmations, and generated output so you can access them later.</li>
+              <li>To create calendar files only from deadlines you explicitly confirm.</li>
               <li>To enforce usage quotas, rate limits, and abuse prevention.</li>
               <li>To improve service reliability through error monitoring and structured logging.</li>
               <li>To send transactional emails (e.g., account-related notifications) via Resend.</li>
@@ -116,8 +122,8 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold text-slate-900">5. Data Retention</h2>
             <ul className="mt-3 list-disc space-y-1 pl-5">
               <li>
-                Your projects, sources, and generated content are retained as long as your account
-                is active.
+                Your course workspaces, sources, planning records, and generated content are
+                retained as long as your account is active.
               </li>
               <li>
                 After account deletion, your personal data is wiped from our systems within{" "}

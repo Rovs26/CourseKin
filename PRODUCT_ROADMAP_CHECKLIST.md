@@ -243,12 +243,14 @@ Goal: make every generated study artifact reliable and defensible.
 
 Goal: establish the ongoing student-to-course relationship and prevent last-minute preparation.
 
-- [ ] Evolve the current project concept into a course-oriented workspace without breaking existing reviewer flows.
-- [ ] Let students add a syllabus and class schedule to each course.
-- [ ] Extract assessments, light assignments, projects, deadlines, rubrics, topic coverage, and uncertain fields.
-- [ ] Require student review and correction before tasks or calendar entries are synchronized.
+- [x] Evolve the current project concept into a course-oriented workspace without breaking existing reviewer flows.
+- [x] Let students add a syllabus and class schedule to each course.
+- [x] Extract proposed assessments, light assignments, projects, deadlines, rubric notes, and uncertain fields for student review.
+- [ ] Extract syllabus topic coverage for readiness mapping.
+- [x] Require student review and correction before confirmed deadlines appear in calendar export.
 - [x] Review the owner's to-do/calendar system and record reusable behavior patterns and architecture boundaries.
-- [ ] Implement CourseKin-owned confirmed task, milestone, reminder, and calendar-export capabilities based on the reviewed patterns.
+- [x] Implement CourseKin-owned confirmed obligation records and confirmation-only `.ics` calendar export.
+- [ ] Implement preparation milestones and reminders based on confirmed obligations.
 - [ ] Add an assessment runway showing due dates, readiness, missing materials, and recommended preparation.
 - [ ] Add a workload balancer that distributes preparation and bounded project steps across the available term.
 
@@ -412,10 +414,13 @@ Goal: broaden course input and institutional connectivity only after the core co
 
 **Objective:** Move from one-time reviewer generation into an ongoing, useful course relationship.
 
-- [ ] Add course workspaces, class schedules, syllabus ingestion, and confirmed obligation extraction.
-- [ ] Review the owner's to-do/calendar project and integrate only after its shared-domain boundaries are clear.
-- [ ] Add reviewed calendar synchronization, assessment runway, and workload balancing.
+- [x] Add course workspaces, class schedules, syllabus ingestion, and confirmed obligation extraction.
+- [x] Review the owner's to-do/calendar project and preserve its useful behavior through CourseKin-owned records.
+- [x] Add reviewed `.ics` calendar export without granting calendar write access.
+- [ ] Add assessment runway, preparation milestones, reminders, workload balancing, and optional reviewed calendar synchronization.
 - [ ] Measure confirmed syllabus extraction accuracy and student return before upcoming assessments.
+
+**May 25, 2026 implementation checkpoint:** The first v2b slice adds optional course profile fields to new and existing workspaces; labels sources as syllabus, lecture notes, assignment briefs, or study materials; allows older uploads to be reclassified; queues syllabus obligation extraction into proposed records; requires student editing and confirmation before export; and generates `.ics` files only from confirmed dated obligations. It deliberately does not create external calendar events, reminders, or readiness plans yet.
 
 ### v2 Phase C: Private Course Stream and Coursework Coach
 
