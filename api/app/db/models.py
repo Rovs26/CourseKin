@@ -19,6 +19,8 @@ class Project(Base):
     term: Mapped[str | None] = mapped_column(String, nullable=True)
     instructor: Mapped[str | None] = mapped_column(String, nullable=True)
     meeting_schedule: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reminders_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    reminder_lead_days: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     user_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)

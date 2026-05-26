@@ -135,6 +135,8 @@ def export_my_data(
             "term": p.term,
             "instructor": p.instructor,
             "meeting_schedule": p.meeting_schedule,
+            "reminders_enabled": p.reminders_enabled,
+            "reminder_lead_days": p.reminder_lead_days,
             "created_at": p.created_at,
             "updated_at": p.updated_at,
         }

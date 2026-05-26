@@ -40,6 +40,8 @@ export interface Project {
   term?: string | null;
   instructor?: string | null;
   meeting_schedule?: string | null;
+  reminders_enabled?: boolean;
+  reminder_lead_days?: number;
   created_at: string;
   updated_at?: string;
 }

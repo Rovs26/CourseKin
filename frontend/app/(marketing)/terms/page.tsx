@@ -61,6 +61,10 @@ export default function TermsPage() {
               the daily capacity you select. Completing sessions tracks preparation activity only;
               it does not guarantee subject mastery or assessment performance.
             </p>
+            <p className="mt-3">
+              In-app reminders are convenience prompts based on your saved plan and settings.
+              You remain responsible for tracking official course deadlines and submissions.
+            </p>
           </section>
 
           <section>

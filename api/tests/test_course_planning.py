@@ -16,6 +16,7 @@ from app.schemas.planning import (
     BuildPreparationPlanRequest,
     CourseObligationReviewRequest,
     PreparationMilestoneUpdateRequest,
+    ReminderPreferenceUpdateRequest,
     SyllabusExtractionRequest,
 )
 from app.services.planning_service import _normalize_obligations
@@ -272,3 +273,95 @@ def test_runway_reports_progress_after_student_completes_a_session(db):
 
     assert refreshed["completed_sessions"] == 1
     assert refreshed["preparation_progress_percent"] == 25
+
+
+def test_in_app_reminders_follow_course_preferences_and_lead_time(db):
+    now = _seed_course(db)
+    obligation = CourseObligation(
+        id="quiz-reminder",
+        project_id="course-1",
+        source_id="syllabus-1",
+        title="Quiz Reminder",
+        obligation_type="quiz",
+        due_date="2026-08-10",
+        details=None,
+        grading_criteria=None,
+        confidence="high",
+        uncertain_fields=[],
+        status="confirmed",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(obligation)
+    db.add_all(
+        [
+            PreparationMilestone(
+                id="session-today",
+                project_id="course-1",
+                obligation_id=obligation.id,
+                title="Review today",
+                milestone_type="recall",
+                sequence=1,
+                scheduled_date="2026-08-01",
+                estimated_minutes=30,
+                status="planned",
+                completed_at=None,
+                created_at=now,
+                updated_at=now,
+            ),
+            PreparationMilestone(
+                id="session-soon",
+                project_id="course-1",
+                obligation_id=obligation.id,
+                title="Review soon",
+                milestone_type="practice",
+                sequence=2,
+                scheduled_date="2026-08-03",
+                estimated_minutes=30,
+                status="planned",
+                completed_at=None,
+                created_at=now,
+                updated_at=now,
+            ),
+            PreparationMilestone(
+                id="session-later",
+                project_id="course-1",
+                obligation_id=obligation.id,
+                title="Review later",
+                milestone_type="final_review",
+                sequence=3,
+                scheduled_date="2026-08-06",
+                estimated_minutes=20,
+                status="planned",
+                completed_at=None,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+    )
+    db.commit()
+    user = CurrentUser("user-1", "student@example.com", None, True)
+
+    planning.update_reminder_preferences(
+        "course-1",
+        ReminderPreferenceUpdateRequest(enabled=True, lead_days=2),
+        db,
+        user,
+    )
+    reminders = planning.list_preparation_reminders("2026-08-01", db, user)
+
+    assert reminders["total"] == 2
+    assert [item["milestone_id"] for item in reminders["items"]] == [
+        "session-today",
+        "session-soon",
+    ]
+    assert reminders["items"][0]["urgency"] == "today"
+
+    planning.update_reminder_preferences(
+        "course-1",
+        ReminderPreferenceUpdateRequest(enabled=False, lead_days=2),
+        db,
+        user,
+    )
+    disabled = planning.list_preparation_reminders("2026-08-01", db, user)
+    assert disabled["items"] == []

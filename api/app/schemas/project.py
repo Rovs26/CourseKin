@@ -99,6 +99,8 @@ class ProjectResponse(BaseModel):
     term: Optional[str] = None
     instructor: Optional[str] = None
     meeting_schedule: Optional[str] = None
+    reminders_enabled: bool = True
+    reminder_lead_days: int = 3
     user_id: Optional[str] = None
     created_at: str
     updated_at: str

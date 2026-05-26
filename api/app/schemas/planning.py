@@ -128,3 +128,35 @@ class PreparationRunwayResponse(BaseModel):
 
 class PreparationMilestoneUpdateRequest(BaseModel):
     status: MilestoneStatus
+
+
+class ReminderPreferenceResponse(BaseModel):
+    project_id: str
+    enabled: bool
+    lead_days: int
+
+
+class ReminderPreferenceUpdateRequest(BaseModel):
+    enabled: bool
+    lead_days: int = Field(ge=0, le=14)
+
+
+class PreparationReminderResponse(BaseModel):
+    milestone_id: str
+    project_id: str
+    project_title: str
+    course_code: Optional[str] = None
+    obligation_id: str
+    obligation_title: str
+    obligation_due_date: Optional[str] = None
+    milestone_title: str
+    scheduled_date: str
+    estimated_minutes: int
+    urgency: Literal["overdue", "today", "upcoming"]
+    days_until: int
+
+
+class PreparationReminderListResponse(BaseModel):
+    items: list[PreparationReminderResponse]
+    total: int
+    reference_date: str

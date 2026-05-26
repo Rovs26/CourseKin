@@ -36,7 +36,8 @@ export default function PrivacyPage() {
               <li>
                 <strong>Course planning information:</strong> Optional course code, academic term,
                 instructor, class schedule, syllabus-derived assessment proposals, your corrections,
-                deadlines you confirm for calendar export, and preparation-session status.
+                deadlines you confirm for calendar export, preparation-session status, and
+                in-app reminder preferences.
               </li>
               <li>
                 <strong>Technical data:</strong> IP address, browser user agent, timestamps of
@@ -58,6 +59,7 @@ export default function PrivacyPage() {
               <li>To store your course workspaces, proposed obligations, confirmations, preparation sessions, and generated output so you can access them later.</li>
               <li>To create calendar files only from deadlines you explicitly confirm.</li>
               <li>To suggest balanced preparation sessions from confirmed deadlines; these suggested sessions are not silently synchronized to an external calendar.</li>
+              <li>To show in-app dashboard prompts for planned sessions when you enable course reminders.</li>
               <li>To enforce usage quotas, rate limits, and abuse prevention.</li>
               <li>To improve service reliability through error monitoring and structured logging.</li>
               <li>To send transactional emails (e.g., account-related notifications) via Resend.</li>

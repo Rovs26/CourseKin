@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ProjectCard } from "@/components/dashboard/project-card";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { UsageOverview } from "@/components/dashboard/usage-overview";
+import { UpcomingPreparation } from "@/components/dashboard/upcoming-preparation";
 import { EmptyState } from "@/components/states/empty-state";
 import { useUser } from "@clerk/nextjs";
 import { useProjectSummaries } from "@/hooks/use-project-summaries";
@@ -52,6 +53,8 @@ export default function DashboardPage() {
           />
         )}
       </section>
+
+      <UpcomingPreparation />
 
       <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
         <RecentActivity summaries={summaries} isLoading={isLoading} error={error} />

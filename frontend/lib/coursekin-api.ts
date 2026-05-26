@@ -201,6 +201,27 @@ export type PreparationRunway = {
   daily_capacity_minutes: number;
 };
 
+export type ReminderPreference = {
+  project_id: string;
+  enabled: boolean;
+  lead_days: number;
+};
+
+export type PreparationReminder = {
+  milestone_id: string;
+  project_id: string;
+  project_title: string;
+  course_code: string | null;
+  obligation_id: string;
+  obligation_title: string;
+  obligation_due_date: string | null;
+  milestone_title: string;
+  scheduled_date: string;
+  estimated_minutes: number;
+  urgency: "overdue" | "today" | "upcoming";
+  days_until: number;
+};
+
 function localCalendarDate() {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -462,6 +483,29 @@ export function updatePreparationMilestone(
   return apiRequest<PreparationMilestone>(
     `/projects/${projectId}/planning/milestones/${milestoneId}`,
     { method: "PATCH", body: JSON.stringify({ status }) }
+  );
+}
+
+export function getReminderPreferences(projectId: string) {
+  return apiRequest<ReminderPreference>(`/projects/${projectId}/planning/reminder-preferences`, {
+    method: "GET",
+  });
+}
+
+export function updateReminderPreferences(
+  projectId: string,
+  input: { enabled: boolean; lead_days: number }
+) {
+  return apiRequest<ReminderPreference>(`/projects/${projectId}/planning/reminder-preferences`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function listPreparationReminders() {
+  return apiRequest<{ items: PreparationReminder[]; total: number; reference_date: string }>(
+    `/planning/reminders?reference_date=${localCalendarDate()}`,
+    { method: "GET" }
   );
 }
 

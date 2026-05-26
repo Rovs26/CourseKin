@@ -19,7 +19,10 @@ from app.schemas.planning import (
     CourseObligationReviewRequest,
     PreparationMilestoneResponse,
     PreparationMilestoneUpdateRequest,
+    PreparationReminderListResponse,
     PreparationRunwayResponse,
+    ReminderPreferenceResponse,
+    ReminderPreferenceUpdateRequest,
     SyllabusExtractionRequest,
 )
 from app.services.generation_guard_service import require_generation_challenge
@@ -89,6 +92,13 @@ def _milestone_to_dict(item: PreparationMilestone) -> dict:
         "created_at": item.created_at,
         "updated_at": item.updated_at,
     }
+
+
+def _parse_reference_date(value: str | None) -> date:
+    try:
+        return date.fromisoformat(value) if value else date.today()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Planning date must use YYYY-MM-DD format") from exc
 
 
 def _runway_to_dict(
@@ -304,10 +314,7 @@ def get_preparation_runway(
 ):
     _require_owned_project(db, project_id, current_user)
     capacity = min(max(daily_capacity_minutes, 30), 360)
-    try:
-        reference_date = date.fromisoformat(planning_date) if planning_date else date.today()
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Planning date must use YYYY-MM-DD format") from exc
+    reference_date = _parse_reference_date(planning_date)
     return _runway_to_dict(db, project_id, capacity, reference_date)
 
 
@@ -366,6 +373,122 @@ def update_preparation_milestone(
     db.commit()
     db.refresh(item)
     return _milestone_to_dict(item)
+
+
+@router.get(
+    "/projects/{project_id}/planning/reminder-preferences",
+    response_model=ReminderPreferenceResponse,
+)
+def get_reminder_preferences(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    project = _require_owned_project(db, project_id, current_user)
+    return {
+        "project_id": project.id,
+        "enabled": project.reminders_enabled,
+        "lead_days": project.reminder_lead_days,
+    }
+
+
+@router.patch(
+    "/projects/{project_id}/planning/reminder-preferences",
+    response_model=ReminderPreferenceResponse,
+)
+def update_reminder_preferences(
+    project_id: str,
+    payload: ReminderPreferenceUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    project = _require_owned_project(db, project_id, current_user)
+    project.reminders_enabled = payload.enabled
+    project.reminder_lead_days = payload.lead_days
+    project.updated_at = utc_now_iso()
+    db.commit()
+    return {
+        "project_id": project.id,
+        "enabled": project.reminders_enabled,
+        "lead_days": project.reminder_lead_days,
+    }
+
+
+@router.get("/planning/reminders", response_model=PreparationReminderListResponse)
+def list_preparation_reminders(
+    reference_date: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    today = _parse_reference_date(reference_date)
+    projects = (
+        db.query(Project)
+        .filter(
+            Project.user_id == current_user.user_id,
+            Project.reminders_enabled.is_(True),
+        )
+        .all()
+    )
+    if not projects:
+        return {"items": [], "total": 0, "reference_date": today.isoformat()}
+
+    projects_by_id = {project.id: project for project in projects}
+    project_ids = list(projects_by_id)
+    milestones = (
+        db.query(PreparationMilestone)
+        .filter(
+            PreparationMilestone.project_id.in_(project_ids),
+            PreparationMilestone.status == "planned",
+        )
+        .all()
+    )
+    obligation_ids = {item.obligation_id for item in milestones}
+    obligations_by_id = {
+        item.id: item
+        for item in db.query(CourseObligation)
+        .filter(
+            CourseObligation.id.in_(obligation_ids),
+            CourseObligation.status == "confirmed",
+        )
+        .all()
+    } if obligation_ids else {}
+
+    reminders = []
+    for milestone in milestones:
+        project = projects_by_id[milestone.project_id]
+        obligation = obligations_by_id.get(milestone.obligation_id)
+        if obligation is None:
+            continue
+        scheduled_date = date.fromisoformat(milestone.scheduled_date)
+        days_until = (scheduled_date - today).days
+        if days_until > project.reminder_lead_days:
+            continue
+        urgency = "overdue" if days_until < 0 else "today" if days_until == 0 else "upcoming"
+        reminders.append(
+            {
+                "milestone_id": milestone.id,
+                "project_id": project.id,
+                "project_title": project.title,
+                "course_code": project.course_code,
+                "obligation_id": obligation.id,
+                "obligation_title": obligation.title,
+                "obligation_due_date": obligation.due_date,
+                "milestone_title": milestone.title,
+                "scheduled_date": milestone.scheduled_date,
+                "estimated_minutes": milestone.estimated_minutes,
+                "urgency": urgency,
+                "days_until": days_until,
+            }
+        )
+    urgency_order = {"today": 0, "overdue": 1, "upcoming": 2}
+    reminders.sort(
+        key=lambda item: (
+            urgency_order[item["urgency"]],
+            -item["days_until"] if item["urgency"] == "overdue" else item["days_until"],
+            item["scheduled_date"],
+        )
+    )
+    return {"items": reminders[:20], "total": len(reminders), "reference_date": today.isoformat()}
 
 
 def _ics_escape(value: str) -> str:

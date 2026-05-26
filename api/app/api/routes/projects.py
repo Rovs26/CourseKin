@@ -45,6 +45,8 @@ def _project_to_dict(project: Project):
         "term": project.term,
         "instructor": project.instructor,
         "meeting_schedule": project.meeting_schedule,
+        "reminders_enabled": project.reminders_enabled,
+        "reminder_lead_days": project.reminder_lead_days,
         "user_id": project.user_id,
         "created_at": project.created_at,
         "updated_at": project.updated_at,
