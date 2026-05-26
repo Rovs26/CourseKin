@@ -12,6 +12,7 @@ from app.db.database import get_db
 from app.db.models import (
     CourseObligation,
     Job,
+    PreparationMilestone,
     Project,
     Reviewer,
     ReviewerFeedback,
@@ -238,6 +239,7 @@ def delete_project(
                 path.unlink()
 
     # Cascade delete related records
+    db.query(PreparationMilestone).filter(PreparationMilestone.project_id == project_id).delete()
     db.query(SourceChunk).filter(SourceChunk.project_id == project_id).delete()
     db.query(Source).filter(Source.project_id == project_id).delete()
     db.query(Job).filter(Job.project_id == project_id).delete()

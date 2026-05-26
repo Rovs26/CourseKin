@@ -17,7 +17,7 @@ export default function TermsPage() {
 
       <article className="mx-auto max-w-3xl px-6 py-16">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Terms of Use</h1>
-        <p className="mt-2 text-sm text-slate-500">Last updated: April 25, 2026</p>
+        <p className="mt-2 text-sm text-slate-500">Last updated: May 26, 2026</p>
 
         <div className="mt-10 space-y-8 text-sm leading-7 text-slate-600">
           <section>
@@ -55,6 +55,11 @@ export default function TermsPage() {
             <p className="mt-3">
               Extracted course obligations are proposals only. You must review and confirm them
               before using a generated calendar file or relying on a deadline.
+            </p>
+            <p className="mt-3">
+              Preparation sessions are scheduling suggestions based on deadlines you confirm and
+              the daily capacity you select. Completing sessions tracks preparation activity only;
+              it does not guarantee subject mastery or assessment performance.
             </p>
           </section>
 

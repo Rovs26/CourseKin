@@ -1,3 +1,5 @@
+from collections import defaultdict
+from datetime import date
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,9 +11,15 @@ from app.api.routes import planning
 from app.core.auth import CurrentUser
 from app.core.utils import utc_now_iso
 from app.db.database import Base
-from app.db.models import CourseObligation, Project, Source
-from app.schemas.planning import CourseObligationReviewRequest, SyllabusExtractionRequest
+from app.db.models import CourseObligation, PreparationMilestone, Project, Source
+from app.schemas.planning import (
+    BuildPreparationPlanRequest,
+    CourseObligationReviewRequest,
+    PreparationMilestoneUpdateRequest,
+    SyllabusExtractionRequest,
+)
 from app.services.planning_service import _normalize_obligations
+from app.services.preparation_service import rebuild_preparation_plan
 
 
 @pytest.fixture()
@@ -164,3 +172,103 @@ def test_confirmed_items_only_are_exported_to_calendar(db):
     assert "DTSTART;VALUE=DATE:20260818" in calendar
     assert "Organic Chemistry I - Quiz 1" in calendar
     assert "Unconfirmed Exam" not in calendar
+
+
+def test_preparation_plan_balances_sessions_and_preserves_completed_work(db):
+    now = _seed_course(db)
+    obligations = [
+        CourseObligation(
+            id=f"quiz-{index}",
+            project_id="course-1",
+            source_id="syllabus-1",
+            title=f"Quiz {index}",
+            obligation_type="quiz",
+            due_date="2026-08-10",
+            details=None,
+            grading_criteria=None,
+            confidence="high",
+            uncertain_fields=[],
+            status="confirmed",
+            created_at=now,
+            updated_at=now,
+        )
+        for index in (1, 2)
+    ]
+    db.add_all(obligations)
+    db.commit()
+
+    milestones = rebuild_preparation_plan(
+        db,
+        "course-1",
+        obligations,
+        daily_capacity_minutes=60,
+        today=date(2026, 8, 1),
+    )
+    totals: dict[str, int] = defaultdict(int)
+    for item in milestones:
+        totals[item.scheduled_date] += item.estimated_minutes
+
+    assert len(milestones) == 8
+    assert max(totals.values()) <= 60
+    assert all(item.scheduled_date < "2026-08-10" for item in milestones)
+
+    completed = milestones[0]
+    completed.status = "completed"
+    completed.completed_at = now
+    db.commit()
+    rebuild_preparation_plan(
+        db,
+        "course-1",
+        obligations,
+        daily_capacity_minutes=60,
+        today=date(2026, 8, 2),
+    )
+
+    preserved = db.get(PreparationMilestone, completed.id)
+    assert preserved is not None
+    assert preserved.status == "completed"
+
+
+def test_runway_reports_progress_after_student_completes_a_session(db):
+    now = _seed_course(db)
+    db.add(
+        CourseObligation(
+            id="confirmed-quiz",
+            project_id="course-1",
+            source_id="syllabus-1",
+            title="Quiz 1",
+            obligation_type="quiz",
+            due_date="2099-08-17",
+            details=None,
+            grading_criteria=None,
+            confidence="high",
+            uncertain_fields=[],
+            status="confirmed",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.commit()
+    user = CurrentUser("user-1", "student@example.com", None, True)
+
+    runway = planning.build_preparation_runway(
+        "course-1",
+        BuildPreparationPlanRequest(daily_capacity_minutes=120),
+        db,
+        user,
+    )
+    assert runway["total_sessions"] == 4
+    assert runway["items"][0]["missing_materials"]
+
+    milestone_id = runway["items"][0]["milestones"][0]["id"]
+    planning.update_preparation_milestone(
+        "course-1",
+        milestone_id,
+        PreparationMilestoneUpdateRequest(status="completed"),
+        db,
+        user,
+    )
+    refreshed = planning.get_preparation_runway("course-1", 120, "2099-08-01", db, user)
+
+    assert refreshed["completed_sessions"] == 1
+    assert refreshed["preparation_progress_percent"] == 25

@@ -20,6 +20,7 @@ from app.db.models import (
     CourseObligation,
     GenerationCache,
     Job,
+    PreparationMilestone,
     Project,
     Reviewer,
     ReviewerFeedback,
@@ -79,6 +80,13 @@ def export_my_data(
     course_obligations = (
         db.execute(
             select(CourseObligation).where(CourseObligation.project_id.in_(project_ids))
+        ).scalars().all()
+        if project_ids else []
+    )
+
+    preparation_milestones = (
+        db.execute(
+            select(PreparationMilestone).where(PreparationMilestone.project_id.in_(project_ids))
         ).scalars().all()
         if project_ids else []
     )
@@ -196,6 +204,22 @@ def export_my_data(
             "updated_at": obligation.updated_at,
         }
 
+    def milestone_to_dict(milestone: PreparationMilestone) -> dict:
+        return {
+            "id": milestone.id,
+            "project_id": milestone.project_id,
+            "obligation_id": milestone.obligation_id,
+            "title": milestone.title,
+            "milestone_type": milestone.milestone_type,
+            "sequence": milestone.sequence,
+            "scheduled_date": milestone.scheduled_date,
+            "estimated_minutes": milestone.estimated_minutes,
+            "status": milestone.status,
+            "completed_at": milestone.completed_at,
+            "created_at": milestone.created_at,
+            "updated_at": milestone.updated_at,
+        }
+
     def reviewer_to_dict(r: Reviewer) -> dict:
         return {
             "project_id": r.project_id,
@@ -288,6 +312,10 @@ def export_my_data(
             json.dumps([obligation_to_dict(item) for item in course_obligations], indent=2),
         )
         zf.writestr(
+            "preparation_milestones.json",
+            json.dumps([milestone_to_dict(item) for item in preparation_milestones], indent=2),
+        )
+        zf.writestr(
             "jobs.json",
             json.dumps([job_to_dict(j) for j in jobs], indent=2),
         )
@@ -367,6 +395,11 @@ def delete_my_account(
         db.execute(
             ReviewerFeedback.__table__.delete().where(
                 ReviewerFeedback.project_id.in_(project_ids)
+            )
+        )
+        db.execute(
+            PreparationMilestone.__table__.delete().where(
+                PreparationMilestone.project_id.in_(project_ids)
             )
         )
         db.execute(

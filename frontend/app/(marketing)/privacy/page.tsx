@@ -17,7 +17,7 @@ export default function PrivacyPage() {
 
       <article className="mx-auto max-w-3xl px-6 py-16">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Privacy Policy</h1>
-        <p className="mt-2 text-sm text-slate-500">Last updated: May 25, 2026</p>
+        <p className="mt-2 text-sm text-slate-500">Last updated: May 26, 2026</p>
 
         <div className="mt-10 space-y-8 text-sm leading-7 text-slate-600">
           <section>
@@ -36,7 +36,7 @@ export default function PrivacyPage() {
               <li>
                 <strong>Course planning information:</strong> Optional course code, academic term,
                 instructor, class schedule, syllabus-derived assessment proposals, your corrections,
-                and deadlines you confirm for calendar export.
+                deadlines you confirm for calendar export, and preparation-session status.
               </li>
               <li>
                 <strong>Technical data:</strong> IP address, browser user agent, timestamps of
@@ -55,8 +55,9 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold text-slate-900">2. How We Use Your Data</h2>
             <ul className="mt-3 list-disc space-y-1 pl-5">
               <li>To generate study materials from your uploaded content.</li>
-              <li>To store your course workspaces, proposed obligations, confirmations, and generated output so you can access them later.</li>
+              <li>To store your course workspaces, proposed obligations, confirmations, preparation sessions, and generated output so you can access them later.</li>
               <li>To create calendar files only from deadlines you explicitly confirm.</li>
+              <li>To suggest balanced preparation sessions from confirmed deadlines; these suggested sessions are not silently synchronized to an external calendar.</li>
               <li>To enforce usage quotas, rate limits, and abuse prevention.</li>
               <li>To improve service reliability through error monitoring and structured logging.</li>
               <li>To send transactional emails (e.g., account-related notifications) via Resend.</li>

@@ -13,7 +13,7 @@ from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import CourseObligation, Project, Source, SourceChunk
+from app.db.models import CourseObligation, PreparationMilestone, Project, Source, SourceChunk
 from app.schemas.source import (
     PresignUploadRequest,
     FinalizeUploadRequest,
@@ -394,6 +394,14 @@ def delete_source(
         if path.exists():
             path.unlink()
 
+    obligation_ids = [
+        item.id
+        for item in db.query(CourseObligation).filter(CourseObligation.source_id == source_id).all()
+    ]
+    if obligation_ids:
+        db.query(PreparationMilestone).filter(
+            PreparationMilestone.obligation_id.in_(obligation_ids)
+        ).delete(synchronize_session=False)
     db.query(CourseObligation).filter(CourseObligation.source_id == source_id).delete()
     db.query(SourceChunk).filter(SourceChunk.source_id == source_id).delete()
     db.delete(source)

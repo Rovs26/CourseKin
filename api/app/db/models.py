@@ -127,6 +127,23 @@ class CourseObligation(Base):
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
+class PreparationMilestone(Base):
+    __tablename__ = "preparation_milestones"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    obligation_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    milestone_type: Mapped[str] = mapped_column(String, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    scheduled_date: Mapped[str] = mapped_column(String, nullable=False)
+    estimated_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    completed_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class UsageLog(Base):
     __tablename__ = "usage_log"
 

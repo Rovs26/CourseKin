@@ -89,6 +89,18 @@ html.dark .bg-white\/90 {
   background-color: rgba(15, 23, 42, 0.9) !important;
 }
 
+html.dark .bg-white\/75 {
+  background-color: rgba(16, 37, 43, 0.82) !important;
+}
+
+html.dark .bg-white\/70 {
+  background-color: rgba(16, 37, 43, 0.76) !important;
+}
+
+html.dark .bg-white\/60 {
+  background-color: rgba(16, 37, 43, 0.68) !important;
+}
+
 html.dark .bg-slate-50 {
   background-color: var(--rf-soft) !important;
 }

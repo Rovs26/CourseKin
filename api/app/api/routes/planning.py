@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -9,15 +10,20 @@ from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import CourseObligation, Job, Project, Source
+from app.db.models import CourseObligation, Job, PreparationMilestone, Project, Source
 from app.schemas.job import JobResponse
 from app.schemas.planning import (
+    BuildPreparationPlanRequest,
     CourseObligationListResponse,
     CourseObligationResponse,
     CourseObligationReviewRequest,
+    PreparationMilestoneResponse,
+    PreparationMilestoneUpdateRequest,
+    PreparationRunwayResponse,
     SyllabusExtractionRequest,
 )
 from app.services.generation_guard_service import require_generation_challenge
+from app.services.preparation_service import rebuild_preparation_plan
 from app.services.usage_service import (
     check_daily_cap,
     check_monthly_quota,
@@ -65,6 +71,121 @@ def _job_to_dict(job: Job) -> dict:
         "created_at": job.created_at,
         "updated_at": job.updated_at,
         "error_message": job.error_message,
+    }
+
+
+def _milestone_to_dict(item: PreparationMilestone) -> dict:
+    return {
+        "id": item.id,
+        "project_id": item.project_id,
+        "obligation_id": item.obligation_id,
+        "title": item.title,
+        "milestone_type": item.milestone_type,
+        "sequence": item.sequence,
+        "scheduled_date": item.scheduled_date,
+        "estimated_minutes": item.estimated_minutes,
+        "status": item.status,
+        "completed_at": item.completed_at,
+        "created_at": item.created_at,
+        "updated_at": item.updated_at,
+    }
+
+
+def _runway_to_dict(
+    db: Session,
+    project_id: str,
+    daily_capacity_minutes: int,
+    planning_date: date,
+) -> dict:
+    obligations = (
+        db.query(CourseObligation)
+        .filter(
+            CourseObligation.project_id == project_id,
+            CourseObligation.status == "confirmed",
+        )
+        .order_by(CourseObligation.due_date.asc(), CourseObligation.created_at.asc())
+        .all()
+    )
+    obligation_ids = [item.id for item in obligations]
+    milestones = (
+        db.query(PreparationMilestone)
+        .filter(PreparationMilestone.obligation_id.in_(obligation_ids))
+        .order_by(PreparationMilestone.scheduled_date.asc(), PreparationMilestone.sequence.asc())
+        .all()
+        if obligation_ids
+        else []
+    )
+    milestones_by_obligation: dict[str, list[PreparationMilestone]] = defaultdict(list)
+    for item in milestones:
+        milestones_by_obligation[item.obligation_id].append(item)
+
+    has_supporting_material = (
+        db.query(Source)
+        .filter(
+            Source.project_id == project_id,
+            Source.status == "processed",
+            Source.purpose.in_(["study_material", "lecture_notes", "assignment_brief"]),
+        )
+        .first()
+        is not None
+    )
+    items = []
+    total_sessions = 0
+    completed_sessions = 0
+    for obligation in obligations:
+        item_milestones = milestones_by_obligation[obligation.id]
+        active_items = [item for item in item_milestones if item.status != "skipped"]
+        completed = sum(item.status == "completed" for item in active_items)
+        total = len(active_items)
+        total_sessions += total
+        completed_sessions += completed
+        next_planned = next((item for item in active_items if item.status == "planned"), None)
+        if next_planned:
+            next_action = f"{next_planned.title} on {next_planned.scheduled_date}"
+        elif obligation.due_date and date.fromisoformat(obligation.due_date) < planning_date:
+            next_action = "This deadline has passed. Confirm a revised date or mark the work complete."
+        elif total == 0:
+            next_action = "Build or rebalance a preparation plan for this deadline."
+        else:
+            next_action = None
+        items.append(
+            {
+                "obligation": _obligation_to_dict(obligation),
+                "milestones": [_milestone_to_dict(item) for item in item_milestones],
+                "preparation_progress_percent": round((completed / total) * 100) if total else 0,
+                "missing_materials": []
+                if has_supporting_material
+                else ["Add lecture notes or study material for grounded preparation."],
+                "next_action": next_action,
+            }
+        )
+
+    day_totals: dict[str, dict[str, int]] = defaultdict(lambda: {"minutes": 0, "count": 0})
+    for item in milestones:
+        if item.status != "skipped":
+            day_totals[item.scheduled_date]["minutes"] += item.estimated_minutes
+            day_totals[item.scheduled_date]["count"] += 1
+    daily_load = [
+        {
+            "date": item_date,
+            "estimated_minutes": totals["minutes"],
+            "session_count": totals["count"],
+            "exceeds_capacity": totals["minutes"] > daily_capacity_minutes,
+        }
+        for item_date, totals in sorted(day_totals.items())
+    ]
+    return {
+        "items": items,
+        "daily_load": daily_load,
+        "confirmed_without_due_date": [
+            _obligation_to_dict(item) for item in obligations if item.due_date is None
+        ],
+        "total_sessions": total_sessions,
+        "completed_sessions": completed_sessions,
+        "preparation_progress_percent": round((completed_sessions / total_sessions) * 100)
+        if total_sessions
+        else 0,
+        "daily_capacity_minutes": daily_capacity_minutes,
     }
 
 
@@ -150,6 +271,7 @@ def review_course_obligation(
     if not item or item.project_id != project_id:
         raise HTTPException(status_code=404, detail="Obligation not found")
 
+    existing_plan_basis = (item.title, item.obligation_type, item.due_date, item.status)
     item.title = payload.title
     item.obligation_type = payload.obligation_type
     item.due_date = payload.due_date
@@ -158,9 +280,92 @@ def review_course_obligation(
     item.status = payload.status
     item.uncertain_fields = []
     item.updated_at = utc_now_iso()
+    updated_plan_basis = (item.title, item.obligation_type, item.due_date, item.status)
+    if payload.status != "confirmed" or existing_plan_basis != updated_plan_basis:
+        db.query(PreparationMilestone).filter(
+            PreparationMilestone.obligation_id == item.id,
+            PreparationMilestone.status != "completed",
+        ).delete(synchronize_session=False)
     db.commit()
     db.refresh(item)
     return _obligation_to_dict(item)
+
+
+@router.get(
+    "/projects/{project_id}/planning/runway",
+    response_model=PreparationRunwayResponse,
+)
+def get_preparation_runway(
+    project_id: str,
+    daily_capacity_minutes: int = 120,
+    planning_date: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_owned_project(db, project_id, current_user)
+    capacity = min(max(daily_capacity_minutes, 30), 360)
+    try:
+        reference_date = date.fromisoformat(planning_date) if planning_date else date.today()
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Planning date must use YYYY-MM-DD format") from exc
+    return _runway_to_dict(db, project_id, capacity, reference_date)
+
+
+@router.post(
+    "/projects/{project_id}/planning/runway/build",
+    response_model=PreparationRunwayResponse,
+)
+def build_preparation_runway(
+    project_id: str,
+    payload: BuildPreparationPlanRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_owned_project(db, project_id, current_user)
+    obligations = (
+        db.query(CourseObligation)
+        .filter(
+            CourseObligation.project_id == project_id,
+            CourseObligation.status == "confirmed",
+        )
+        .all()
+    )
+    planning_date = (
+        date.fromisoformat(payload.planning_start_date)
+        if payload.planning_start_date
+        else date.today()
+    )
+    rebuild_preparation_plan(
+        db,
+        project_id,
+        obligations,
+        payload.daily_capacity_minutes,
+        planning_date,
+    )
+    return _runway_to_dict(db, project_id, payload.daily_capacity_minutes, planning_date)
+
+
+@router.patch(
+    "/projects/{project_id}/planning/milestones/{milestone_id}",
+    response_model=PreparationMilestoneResponse,
+)
+def update_preparation_milestone(
+    project_id: str,
+    milestone_id: str,
+    payload: PreparationMilestoneUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_owned_project(db, project_id, current_user)
+    item = db.get(PreparationMilestone, milestone_id)
+    if not item or item.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Preparation milestone not found")
+    item.status = payload.status
+    item.completed_at = utc_now_iso() if payload.status == "completed" else None
+    item.updated_at = utc_now_iso()
+    db.commit()
+    db.refresh(item)
+    return _milestone_to_dict(item)
 
 
 def _ics_escape(value: str) -> str:

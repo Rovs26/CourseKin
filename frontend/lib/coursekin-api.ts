@@ -161,6 +161,53 @@ export type CourseObligation = {
   updated_at: string;
 };
 
+export type PreparationMilestoneStatus = "planned" | "completed" | "skipped";
+
+export type PreparationMilestone = {
+  id: string;
+  project_id: string;
+  obligation_id: string;
+  title: string;
+  milestone_type: string;
+  sequence: number;
+  scheduled_date: string;
+  estimated_minutes: number;
+  status: PreparationMilestoneStatus;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PreparationRunwayItem = {
+  obligation: CourseObligation;
+  milestones: PreparationMilestone[];
+  preparation_progress_percent: number;
+  missing_materials: string[];
+  next_action: string | null;
+};
+
+export type PreparationRunway = {
+  items: PreparationRunwayItem[];
+  daily_load: {
+    date: string;
+    estimated_minutes: number;
+    session_count: number;
+    exceeds_capacity: boolean;
+  }[];
+  confirmed_without_due_date: CourseObligation[];
+  total_sessions: number;
+  completed_sessions: number;
+  preparation_progress_percent: number;
+  daily_capacity_minutes: number;
+};
+
+function localCalendarDate() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
 
@@ -387,6 +434,34 @@ export function reviewCourseObligation(
   return apiRequest<CourseObligation>(
     `/projects/${projectId}/planning/obligations/${obligationId}`,
     { method: "PATCH", body: JSON.stringify(input) }
+  );
+}
+
+export function getPreparationRunway(projectId: string, dailyCapacityMinutes = 120) {
+  return apiRequest<PreparationRunway>(
+    `/projects/${projectId}/planning/runway?daily_capacity_minutes=${dailyCapacityMinutes}&planning_date=${localCalendarDate()}`,
+    { method: "GET" }
+  );
+}
+
+export function buildPreparationRunway(projectId: string, dailyCapacityMinutes = 120) {
+  return apiRequest<PreparationRunway>(`/projects/${projectId}/planning/runway/build`, {
+    method: "POST",
+    body: JSON.stringify({
+      daily_capacity_minutes: dailyCapacityMinutes,
+      planning_start_date: localCalendarDate(),
+    }),
+  });
+}
+
+export function updatePreparationMilestone(
+  projectId: string,
+  milestoneId: string,
+  status: PreparationMilestoneStatus
+) {
+  return apiRequest<PreparationMilestone>(
+    `/projects/${projectId}/planning/milestones/${milestoneId}`,
+    { method: "PATCH", body: JSON.stringify({ status }) }
   );
 }
 

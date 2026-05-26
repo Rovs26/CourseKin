@@ -250,9 +250,10 @@ Goal: establish the ongoing student-to-course relationship and prevent last-minu
 - [x] Require student review and correction before confirmed deadlines appear in calendar export.
 - [x] Review the owner's to-do/calendar system and record reusable behavior patterns and architecture boundaries.
 - [x] Implement CourseKin-owned confirmed obligation records and confirmation-only `.ics` calendar export.
-- [ ] Implement preparation milestones and reminders based on confirmed obligations.
-- [ ] Add an assessment runway showing due dates, readiness, missing materials, and recommended preparation.
-- [ ] Add a workload balancer that distributes preparation and bounded project steps across the available term.
+- [x] Implement preparation milestones based on confirmed obligations.
+- [ ] Add reminder delivery and notification preferences for upcoming preparation milestones.
+- [x] Add an assessment runway showing due dates, missing materials, recommended preparation, and session progress; reserve readiness claims for measured mastery.
+- [x] Add an initial workload balancer that distributes bounded preparation and project steps under a student-selected daily capacity.
 
 **First validation wedge:** An adult university student uploads a syllabus, confirms extracted obligations, and receives a realistic preparation plan before the first assessment.
 
@@ -417,10 +418,13 @@ Goal: broaden course input and institutional connectivity only after the core co
 - [x] Add course workspaces, class schedules, syllabus ingestion, and confirmed obligation extraction.
 - [x] Review the owner's to-do/calendar project and preserve its useful behavior through CourseKin-owned records.
 - [x] Add reviewed `.ics` calendar export without granting calendar write access.
-- [ ] Add assessment runway, preparation milestones, reminders, workload balancing, and optional reviewed calendar synchronization.
+- [x] Add assessment runway, preparation milestones, and initial workload balancing.
+- [ ] Add reminder delivery, notification preferences, and optional reviewed calendar synchronization.
 - [ ] Measure confirmed syllabus extraction accuracy and student return before upcoming assessments.
 
 **May 25, 2026 implementation checkpoint:** The first v2b slice adds optional course profile fields to new and existing workspaces; labels sources as syllabus, lecture notes, assignment briefs, or study materials; allows older uploads to be reclassified; queues syllabus obligation extraction into proposed records; requires student editing and confirmation before export; and generates `.ics` files only from confirmed dated obligations. It deliberately does not create external calendar events, reminders, or readiness plans yet.
+
+**May 26, 2026 implementation checkpoint:** The second v2b slice adds a deterministic Preparation Runway from confirmed dated obligations. It creates bounded study or light-coursework sessions, balances them under a selected daily capacity where deadlines permit, preserves completed sessions during rebalancing, flags missing study material, and tracks session completion as preparation progress only. It does not send reminders, create calendar events for suggested sessions, or claim mastery/readiness.
 
 ### v2 Phase C: Private Course Stream and Coursework Coach
 

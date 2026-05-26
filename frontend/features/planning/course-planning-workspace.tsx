@@ -16,6 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/states/empty-state";
 import { TurnstileWidget } from "@/components/reviewer/turnstile-widget";
+import { PreparationRunway } from "@/features/planning/preparation-runway";
 import { useProject } from "@/hooks/use-project";
 import { useSources } from "@/hooks/use-sources";
 import { useObligations } from "@/hooks/use-obligations";
@@ -162,6 +163,7 @@ export function CoursePlanningWorkspace({ projectId }: { projectId: string }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [runwayRefreshToken, setRunwayRefreshToken] = useState(0);
 
   useEffect(() => {
     if (!sourceId && syllabusSources[0]) setSourceId(syllabusSources[0].id);
@@ -224,6 +226,11 @@ export function CoursePlanningWorkspace({ projectId }: { projectId: string }) {
     } finally {
       setExporting(false);
     }
+  };
+
+  const refreshPlanning = () => {
+    refetch();
+    setRunwayRefreshToken((value) => value + 1);
   };
 
   if (projectLoading || sourcesLoading || obligationsLoading) {
@@ -306,11 +313,13 @@ export function CoursePlanningWorkspace({ projectId }: { projectId: string }) {
             />
           ) : (
             visibleItems.map((item) => (
-              <ObligationEditor key={item.id} item={item} onSaved={refetch} />
+              <ObligationEditor key={item.id} item={item} onSaved={refreshPlanning} />
             ))
           )}
         </div>
       </div>
+
+      <PreparationRunway projectId={projectId} refreshToken={runwayRefreshToken} />
     </div>
   );
 }

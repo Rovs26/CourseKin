@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 ObligationType = Literal["quiz", "exam", "assignment", "project", "paper", "reading", "other"]
 ObligationStatus = Literal["proposed", "confirmed", "dismissed"]
 Confidence = Literal["high", "medium", "low"]
+MilestoneStatus = Literal["planned", "completed", "skipped"]
 
 
 class SyllabusExtractionRequest(BaseModel):
@@ -70,3 +71,60 @@ class CourseObligationReviewRequest(BaseModel):
         if len(value) > 2000:
             raise ValueError("Text must be 2000 characters or fewer")
         return value or None
+
+
+class BuildPreparationPlanRequest(BaseModel):
+    daily_capacity_minutes: int = Field(default=120, ge=30, le=360)
+    planning_start_date: Optional[str] = None
+
+    @field_validator("planning_start_date")
+    @classmethod
+    def validate_planning_start_date(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not value.strip():
+            return None
+        date.fromisoformat(value)
+        return value
+
+
+class PreparationMilestoneResponse(BaseModel):
+    id: str
+    project_id: str
+    obligation_id: str
+    title: str
+    milestone_type: str
+    sequence: int
+    scheduled_date: str
+    estimated_minutes: int
+    status: MilestoneStatus
+    completed_at: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class DayLoadResponse(BaseModel):
+    date: str
+    estimated_minutes: int
+    session_count: int
+    exceeds_capacity: bool
+
+
+class AssessmentRunwayItemResponse(BaseModel):
+    obligation: CourseObligationResponse
+    milestones: list[PreparationMilestoneResponse]
+    preparation_progress_percent: int
+    missing_materials: list[str] = Field(default_factory=list)
+    next_action: Optional[str] = None
+
+
+class PreparationRunwayResponse(BaseModel):
+    items: list[AssessmentRunwayItemResponse]
+    daily_load: list[DayLoadResponse]
+    confirmed_without_due_date: list[CourseObligationResponse]
+    total_sessions: int
+    completed_sessions: int
+    preparation_progress_percent: int
+    daily_capacity_minutes: int
+
+
+class PreparationMilestoneUpdateRequest(BaseModel):
+    status: MilestoneStatus
