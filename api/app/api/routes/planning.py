@@ -38,9 +38,12 @@ from app.schemas.planning import (
     ReminderPreferenceResponse,
     ReminderPreferenceUpdateRequest,
     SyllabusExtractionRequest,
+    TaskExtractionRequest,
+    TaskExtractionResponse,
     TaskFocusSessionResponse,
     TaskFocusStartRequest,
     TaskFocusStopRequest,
+    TaskProposal,
     TaskStatsResponse,
     ObligationTopicsUpdateRequest,
     ObligationReadinessResponse,
@@ -52,10 +55,12 @@ from app.services.coverage_service import (
     compute_project_coverage,
 )
 from app.services.preparation_service import rebuild_preparation_plan
+from app.services.task_extraction_service import extract_tasks_from_input
 from app.services.usage_service import (
     check_daily_cap,
     check_monthly_quota,
     lock_quota_for_user,
+    record_usage,
     reserve_usage,
 )
 
@@ -404,6 +409,89 @@ def extract_syllabus_obligations(
     db.commit()
     db.refresh(job)
     return _job_to_dict(job)
+
+
+@router.post(
+    "/projects/{project_id}/planning/task-proposals/extract",
+    response_model=TaskExtractionResponse,
+)
+@limiter.limit("20/hour;60/day;200/month")
+def extract_task_proposals(
+    request: Request,
+    project_id: str,
+    payload: TaskExtractionRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Confirmation-first task extraction from a paste of text or a photo.
+
+    Returns proposals only — the client confirms and then calls the
+    standard POST /projects/{id}/planning/tasks endpoint to persist.
+    """
+    project = _require_owned_project(db, project_id, current_user)
+    if not payload.text and not payload.image_base64:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide pasted text or an image to extract tasks from",
+        )
+
+    require_generation_challenge(request, payload.turnstile_token, current_user.user_id, db)
+    lock_quota_for_user(current_user.user_id, db)
+    check_daily_cap(user_id=current_user.user_id, db=db)
+    check_monthly_quota(user_id=current_user.user_id, db=db)
+
+    # Gather lightweight course context so the model can ground titles.
+    course_context: list[str] = []
+    if project.title:
+        course_context.append(f"Course: {project.title}")
+    if project.course_code:
+        course_context.append(f"Code: {project.course_code}")
+    upcoming = (
+        db.query(CourseObligation)
+        .filter(
+            CourseObligation.project_id == project_id,
+            CourseObligation.status == "confirmed",
+            CourseObligation.due_date >= date.today().isoformat(),
+        )
+        .order_by(CourseObligation.due_date.asc())
+        .limit(8)
+        .all()
+    )
+    for ob in upcoming:
+        course_context.append(
+            f"- {ob.title} ({ob.obligation_type})"
+            + (f" due {ob.due_date}" if ob.due_date else "")
+        )
+
+    try:
+        proposals, usage_meta = extract_tasks_from_input(
+            text=payload.text,
+            image_base64=payload.image_base64,
+            course_context=course_context,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Task extraction failed: {exc}")
+
+    try:
+        record_usage(
+            db=db,
+            user_id=current_user.user_id,
+            job_id=None,
+            model=usage_meta["model"],
+            prompt_tokens=usage_meta["prompt_tokens"],
+            completion_tokens=usage_meta["completion_tokens"],
+            cost_usd=usage_meta["cost_usd"],
+        )
+    except Exception:
+        db.rollback()
+
+    return TaskExtractionResponse(
+        proposals=[TaskProposal(**p) for p in proposals],
+        model=usage_meta["model"],
+        cost_usd=usage_meta["cost_usd"],
+    )
 
 
 @router.patch(

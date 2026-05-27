@@ -1282,3 +1282,33 @@ export async function downloadCustomPdf(
 
   return response.blob();
 }
+
+// ─── Task proposal extraction (paste text or photo) ─────────────────
+
+export type TaskProposal = {
+  title: string;
+  notes: string | null;
+  due_date: string | null;
+  priority: CourseTaskPriority;
+  confidence: "high" | "medium" | "low";
+  uncertain_fields: string[];
+};
+
+export type TaskExtractionResponse = {
+  proposals: TaskProposal[];
+  model: string;
+  cost_usd: number;
+};
+
+export function extractTaskProposals(
+  projectId: string,
+  payload: { text?: string; image_base64?: string; turnstile_token?: string }
+) {
+  return apiRequest<TaskExtractionResponse>(
+    `/projects/${projectId}/planning/task-proposals/extract`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}

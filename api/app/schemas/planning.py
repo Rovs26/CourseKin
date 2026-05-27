@@ -454,6 +454,52 @@ class TaskStatsResponse(BaseModel):
     tag_counts: list[dict] = []
 
 
+class TaskProposal(BaseModel):
+    title: str
+    notes: Optional[str] = None
+    due_date: Optional[str] = None
+    priority: TaskPriority = "medium"
+    confidence: Confidence = "medium"
+    uncertain_fields: list[str] = Field(default_factory=list)
+
+
+class TaskExtractionRequest(BaseModel):
+    text: Optional[str] = None
+    image_base64: Optional[str] = None
+    turnstile_token: Optional[str] = None
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        if len(value) > 8000:
+            raise ValueError("Pasted text must be 8000 characters or fewer")
+        return value
+
+    @field_validator("image_base64")
+    @classmethod
+    def validate_image(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        # ~5MB ceiling on base64 payload (5_500_000 chars ≈ 4.1MB binary).
+        if len(value) > 5_500_000:
+            raise ValueError("Image payload exceeds the 4MB limit")
+        return value
+
+
+class TaskExtractionResponse(BaseModel):
+    proposals: list[TaskProposal]
+    model: str
+    cost_usd: float
+
+
 class CalendarAgendaItemResponse(BaseModel):
     id: str
     item_type: Literal["deadline", "preparation_session", "task"]
