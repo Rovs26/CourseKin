@@ -24,13 +24,17 @@ export type ReviewerSectionKey =
 export function ReviewerTabs({
   content,
   projectId,
+  reviewerVersion,
   onRegenerateSection,
   isRegeneratingSection = false,
+  onQuizAttemptSaved,
 }: {
   content: ReviewerContent;
   projectId: string;
+  reviewerVersion: number;
   onRegenerateSection?: (section: ReviewerSectionKey) => void;
   isRegeneratingSection?: boolean;
+  onQuizAttemptSaved?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<ReviewerSectionKey>("summary");
   const recordFeedback = (
@@ -98,7 +102,7 @@ export function ReviewerTabs({
                 onClick={() => onRegenerateSection?.(activeTab)}
                 disabled={!onRegenerateSection || isRegeneratingSection}
               >
-                {isRegeneratingSection ? "Regenerating..." : "Regenerate Section"}
+                {isRegeneratingSection ? "Updating..." : "Update Section"}
               </Button>
             </div>
           </div>
@@ -138,9 +142,12 @@ export function ReviewerTabs({
 
             <TabsContent value="quiz">
               <QuizPanel
+                projectId={projectId}
+                reviewerVersion={reviewerVersion}
                 quiz={content.quiz}
                 evidence={content._evidence?.quiz}
                 onFeedback={(index, rating) => recordFeedback("quiz", index)(rating)}
+                onAttemptSaved={onQuizAttemptSaved}
               />
             </TabsContent>
 

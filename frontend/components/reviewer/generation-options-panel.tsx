@@ -141,11 +141,11 @@ export function GenerationOptionsPanel({
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-lg text-slate-900">
-              {isRegenerating ? "Regeneration Options" : "Generation Options"}
+              {isRegenerating ? "Update notebook" : "Build notebook"}
             </CardTitle>
             {sourceName && (
               <p className="mt-1 text-sm font-medium text-slate-600">
-                Source: {sourceName}
+                Material: {sourceName}
               </p>
             )}
           </div>
@@ -163,7 +163,7 @@ export function GenerationOptionsPanel({
           </button>
         </div>
         <p className="text-sm text-slate-500">
-          Choose which sections to generate and how many items per section.
+          Choose which study sections to build and how much practice to include.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -258,7 +258,7 @@ export function GenerationOptionsPanel({
             disabled={selectedSections.size === 0 || !turnstileReady}
             className="flex-1 rounded-xl"
           >
-            {isRegenerating ? "Regenerate" : "Generate"} ({selectedSections.size}{" "}
+            {isRegenerating ? "Update Notebook" : "Build Notebook"} ({selectedSections.size}{" "}
             {selectedSections.size === 1 ? "section" : "sections"})
           </Button>
           <Button variant="outline" onClick={onCancel} className="rounded-xl">
@@ -438,10 +438,10 @@ export function MultiSourcePanel({
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-lg text-slate-900">
-              Multi-Source Generation
+              Build from multiple materials
             </CardTitle>
             <p className="mt-1 text-sm text-slate-500">
-              Select sources and configure what to generate from each one.
+              Choose course materials and the study sections each one should support.
             </p>
           </div>
           <button
@@ -608,8 +608,8 @@ export function MultiSourcePanel({
             disabled={selectedSourceIds.size === 0 || !turnstileReady}
             className="flex-1 rounded-xl"
           >
-            Generate from {selectedSourceIds.size}{" "}
-            {selectedSourceIds.size === 1 ? "source" : "sources"}
+            Build from {selectedSourceIds.size}{" "}
+            {selectedSourceIds.size === 1 ? "material" : "materials"}
           </Button>
           <Button variant="outline" onClick={onCancel} className="rounded-xl">
             Cancel

@@ -39,6 +39,7 @@ export interface ReviewerContent {
     answer: string;
   }[];
   quiz: {
+    topic?: string;
     question: string;
     choices: string[];
     answer: string;

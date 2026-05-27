@@ -39,6 +39,7 @@ def build_fake_reviewer(project_id: str, source_id: str) -> dict:
             ],
             "quiz": [
                 {
+                    "topic": "Application flow",
                     "question": "What is the purpose of this fake reviewer?",
                     "choices": [
                         "To replace the final AI system",

@@ -3,13 +3,14 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import Project, Reviewer, ReviewerFeedback, Job, Source
+from app.db.models import Job, Project, QuizAttempt, Reviewer, ReviewerFeedback, Source
 from app.schemas.job import JobResponse
 from app.schemas.reviewer import (
     ReviewerResponse,
@@ -19,6 +20,9 @@ from app.schemas.reviewer import (
     CustomPdfRequest,
     ReviewerFeedbackRequest,
     ReviewerFeedbackResponse,
+    QuizAttemptRequest,
+    QuizAttemptResponse,
+    QuizPracticeSummaryResponse,
 )
 from app.services.generation_guard_service import require_generation_challenge
 from app.services.usage_service import (
@@ -59,6 +63,20 @@ def _job_to_dict(job: Job):
         "created_at": job.created_at,
         "updated_at": job.updated_at,
         "error_message": job.error_message,
+    }
+
+
+def _quiz_attempt_to_dict(attempt: QuizAttempt):
+    return {
+        "id": attempt.id,
+        "project_id": attempt.project_id,
+        "reviewer_version": attempt.reviewer_version,
+        "results": attempt.results,
+        "total_questions": attempt.total_questions,
+        "correct_answers": attempt.correct_answers,
+        "score_percent": attempt.score_percent,
+        "duration_seconds": attempt.duration_seconds,
+        "created_at": attempt.created_at,
     }
 
 
@@ -194,6 +212,246 @@ def record_reviewer_feedback(
         "comment": feedback.comment,
         "created_at": feedback.created_at,
         "updated_at": feedback.updated_at,
+    }
+
+
+@router.post(
+    "/projects/{project_id}/reviewer/quiz-attempts",
+    response_model=QuizAttemptResponse,
+)
+@limiter.limit("120/hour")
+def record_quiz_attempt(
+    request: Request,
+    project_id: str,
+    payload: QuizAttemptRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
+
+    reviewer = db.get(Reviewer, project_id)
+    if (
+        not reviewer
+        or reviewer.version != payload.reviewer_version
+        or not isinstance(reviewer.content_json, dict)
+    ):
+        raise HTTPException(status_code=400, detail="This notebook changed. Reload before practicing.")
+
+    quiz = reviewer.content_json.get("quiz")
+    if not isinstance(quiz, list) or not quiz:
+        raise HTTPException(status_code=400, detail="No quiz is available in this notebook")
+    if len(payload.answers) != len(quiz):
+        raise HTTPException(status_code=400, detail="Answer every quiz question before submitting")
+
+    answer_by_index = {answer.item_index: answer.selected_answer for answer in payload.answers}
+    if set(answer_by_index) != set(range(len(quiz))):
+        raise HTTPException(status_code=400, detail="Answer every quiz question before submitting")
+
+    evidence = reviewer.content_json.get("_evidence", {})
+    quiz_evidence = evidence.get("quiz", []) if isinstance(evidence, dict) else []
+    results: list[dict] = []
+    for index, item in enumerate(quiz):
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail="Quiz content is malformed")
+        choices = item.get("choices")
+        correct_answer = item.get("answer")
+        selected_answer = answer_by_index[index]
+        if (
+            not isinstance(choices, list)
+            or not isinstance(correct_answer, str)
+            or selected_answer not in choices
+        ):
+            raise HTTPException(status_code=400, detail="Select an available answer for each question")
+        raw_topic = item.get("topic")
+        topic = (
+            raw_topic.strip()[:120]
+            if isinstance(raw_topic, str) and raw_topic.strip()
+            else None
+        )
+        result = {
+            "item_index": index,
+            "question": str(item.get("question", "")),
+            "selected_answer": selected_answer,
+            "correct_answer": correct_answer,
+            "rationale": str(item.get("rationale", "")),
+            "is_correct": selected_answer == correct_answer,
+            "topic": topic,
+            "evidence": quiz_evidence[index]
+            if index < len(quiz_evidence) and isinstance(quiz_evidence[index], dict)
+            else None,
+        }
+        results.append(result)
+
+    correct_answers = sum(1 for result in results if result["is_correct"])
+    now = utc_now_iso()
+    attempt = QuizAttempt(
+        id=str(uuid4()),
+        user_id=current_user.user_id,
+        project_id=project_id,
+        reviewer_version=reviewer.version,
+        results=results,
+        total_questions=len(results),
+        correct_answers=correct_answers,
+        score_percent=round((correct_answers / len(results)) * 100),
+        duration_seconds=payload.duration_seconds,
+        created_at=now,
+    )
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+    return _quiz_attempt_to_dict(attempt)
+
+
+@router.get(
+    "/projects/{project_id}/reviewer/practice-summary",
+    response_model=QuizPracticeSummaryResponse,
+)
+def get_quiz_practice_summary(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
+
+    totals = (
+        db.query(
+            func.count(QuizAttempt.id),
+            func.coalesce(func.sum(QuizAttempt.total_questions), 0),
+            func.coalesce(func.sum(QuizAttempt.correct_answers), 0),
+            func.max(QuizAttempt.score_percent),
+        )
+        .filter(
+            QuizAttempt.project_id == project_id,
+            QuizAttempt.user_id == current_user.user_id,
+        )
+        .one()
+    )
+    total_attempts = int(totals[0])
+    if total_attempts == 0:
+        return {
+            "total_attempts": 0,
+            "total_answered": 0,
+            "total_correct": 0,
+            "latest_score_percent": None,
+            "best_score_percent": None,
+            "practice_signal": "no_practice",
+            "practice_signal_label": "No practice recorded",
+            "signal_note": "Take a notebook quiz to begin measuring recall. Preparation sessions alone do not show mastery.",
+            "next_action": "Take the quiz in this notebook and review every missed answer.",
+            "focus_topics": [],
+            "focus_questions": [],
+            "recent_attempts": [],
+        }
+
+    attempts = (
+        db.query(QuizAttempt)
+        .filter(
+            QuizAttempt.project_id == project_id,
+            QuizAttempt.user_id == current_user.user_id,
+        )
+        .order_by(QuizAttempt.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    latest = attempts[0]
+    focus_questions = [result for result in latest.results if not result["is_correct"]][:3]
+    topic_totals: dict[str, dict] = {}
+    for attempt in attempts:
+        for result in attempt.results:
+            if not isinstance(result, dict):
+                continue
+            raw_topic = result.get("topic")
+            if not isinstance(raw_topic, str) or not raw_topic.strip():
+                continue
+            topic = raw_topic.strip()
+            key = topic.casefold()
+            stats = topic_totals.setdefault(
+                key,
+                {
+                    "topic": topic,
+                    "questions_answered": 0,
+                    "correct_answers": 0,
+                    "missed_count": 0,
+                },
+            )
+            stats["questions_answered"] += 1
+            if result.get("is_correct") is True:
+                stats["correct_answers"] += 1
+            else:
+                stats["missed_count"] += 1
+
+    focus_topics = []
+    for stats in topic_totals.values():
+        score_percent = round(
+            (stats["correct_answers"] / stats["questions_answered"]) * 100
+        )
+        if stats["missed_count"] and score_percent < 70:
+            status = "needs_review"
+            action = f"Review the cited explanation for {stats['topic']}, then retry it."
+        elif stats["missed_count"]:
+            status = "practicing"
+            action = f"Keep practicing {stats['topic']} to make recall more consistent."
+        else:
+            status = "recall_improving"
+            action = f"Recheck {stats['topic']} later with new practice material."
+        focus_topics.append(
+            {
+                **stats,
+                "score_percent": score_percent,
+                "status": status,
+                "recommended_action": action,
+            }
+        )
+    status_order = {"needs_review": 0, "practicing": 1, "recall_improving": 2}
+    focus_topics.sort(
+        key=lambda item: (
+            status_order[item["status"]],
+            item["score_percent"],
+            -item["missed_count"],
+            item["topic"].casefold(),
+        )
+    )
+    focus_topics = focus_topics[:5]
+    if total_attempts == 1:
+        signal = "early"
+        label = "First check-in recorded"
+        note = "One quiz attempt is an early recall signal, not an exam readiness score."
+    elif latest.score_percent < 70:
+        signal = "needs_review"
+        label = "Review recommended"
+        note = "Recent quiz results show material worth reviewing before your next assessment."
+    else:
+        signal = "building"
+        label = "Recall is building"
+        note = "Recent quiz results are promising, but this is not an exam readiness score."
+
+    if focus_topics and focus_topics[0]["status"] == "needs_review":
+        next_action = (
+            f"Focus first on {focus_topics[0]['topic']}, then retry a short quiz."
+        )
+    elif focus_questions:
+        next_action = "Review the missed questions below, then retry this quiz."
+    else:
+        next_action = "Revisit this quiz later or build new questions from additional material."
+    return {
+        "total_attempts": total_attempts,
+        "total_answered": int(totals[1]),
+        "total_correct": int(totals[2]),
+        "latest_score_percent": latest.score_percent,
+        "best_score_percent": int(totals[3]),
+        "practice_signal": signal,
+        "practice_signal_label": label,
+        "signal_note": note,
+        "next_action": next_action,
+        "focus_topics": focus_topics,
+        "focus_questions": focus_questions,
+        "recent_attempts": [_quiz_attempt_to_dict(attempt) for attempt in attempts],
     }
 
 

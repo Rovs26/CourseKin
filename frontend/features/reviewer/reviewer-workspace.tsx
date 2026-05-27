@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowRight, BookOpenCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +12,7 @@ import {
 } from "@/components/reviewer/reviewer-tabs";
 import { SourceList } from "@/components/sources/source-list";
 import { RightPanel } from "@/components/layout/right-panel";
+import { PracticeSummary } from "@/components/reviewer/practice-summary";
 import { EmptyState } from "@/components/states/empty-state";
 import {
   GenerationOptionsPanel,
@@ -93,6 +96,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
   const [jobError, setJobError] = useState<string | null>(null);
   const [optionsView, setOptionsView] = useState<OptionsView>(null);
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
+  const [practiceRefreshToken, setPracticeRefreshToken] = useState(0);
 
   const templateConfig = getTemplateConfig(project?.template_id);
   const isLoading = isProjectLoading || isSourcesLoading || isReviewerLoading;
@@ -244,7 +248,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
       setGenerationMode(null);
       setCurrentStage(null);
       setJobError(
-        err instanceof Error ? err.message : "Failed to start generation."
+        err instanceof Error ? err.message : "Failed to start building the notebook."
       );
     }
   };
@@ -275,7 +279,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
       setCurrentStage(null);
       setBatchProgress(null);
       setJobError(
-        err instanceof Error ? err.message : "Failed to start batch generation."
+        err instanceof Error ? err.message : "Failed to start building the notebook."
       );
     }
   };
@@ -288,18 +292,18 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
   const stageTitle =
     currentStage === "completed"
       ? activeSection
-        ? "Section regenerated"
-        : "Reviewer generated"
+        ? "Section updated"
+        : "Notebook ready"
       : currentStage
       ? batchProgress
-        ? `Source ${batchProgress.done + 1}/${batchProgress.total}: ${formatLabel(currentStage)}...`
+        ? `Material ${batchProgress.done + 1}/${batchProgress.total}: ${formatLabel(currentStage)}...`
         : `${formatLabel(currentStage)}...`
       : null;
 
   if (isLoading) {
     return (
       <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <p className="text-sm text-slate-500">Loading reviewer...</p>
+        <p className="text-sm text-slate-500">Loading notebook...</p>
       </div>
     );
   }
@@ -307,7 +311,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
   if (projectError || sourcesError || reviewerError) {
     return (
       <EmptyState
-        title="Unable to load reviewer"
+        title="Unable to load notebook"
         description={
           projectError ??
           sourcesError ??
@@ -321,8 +325,8 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
   if (!project) {
     return (
       <EmptyState
-        title="Project not found"
-        description="This project does not exist in the current workspace."
+        title="Course not found"
+        description="This course does not exist in your workspace."
       />
     );
   }
@@ -330,7 +334,38 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
   const processedCount = sources.filter((s) => s.status === "processed").length;
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
+    <div className="space-y-6">
+      <Card className="rounded-2xl border-[var(--ck-primary-border)] bg-[var(--ck-primary-soft)] shadow-sm">
+        <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex gap-4">
+            <BookOpenCheck className="mt-1 h-7 w-7 shrink-0 text-[var(--ck-primary)]" />
+            <div>
+              <p className="text-sm font-semibold text-[var(--ck-ink)]">Notebook</p>
+              <h2 className="mt-1 text-xl font-semibold text-[var(--ck-ink)]">
+                Build study material you can trace back to class.
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm text-slate-700">
+                Choose processed materials to create cited summaries, questions, quizzes, and
+                flashcards. Notes and questions saved in Room remain there unless you deliberately
+                use their linked materials here.
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={routes.courseRoom(projectId)}>Open Room</Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link href={routes.courseMaterials(projectId)}>
+                Add material
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
       <Card className="h-fit rounded-2xl shadow-sm">
         <CardContent className="space-y-6 p-4">
           {templateConfig && (
@@ -347,7 +382,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
           <div>
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Sources
+                Materials
               </h2>
               {processedCount >= 2 && (
                 <button
@@ -355,7 +390,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
                   disabled={isGenerating}
                   className="text-[10px] font-semibold text-slate-600 hover:text-slate-900 disabled:opacity-40"
                 >
-                  Multi-Source
+                  Combine
                 </button>
               )}
             </div>
@@ -443,10 +478,10 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
             <CardContent>
               <p className="text-sm text-slate-600">
                 {batchProgress
-                  ? `Processing source ${batchProgress.done + 1} of ${batchProgress.total}`
+                  ? `Processing material ${batchProgress.done + 1} of ${batchProgress.total}`
                   : generationMode === "section"
                   ? "Updating selected sections"
-                  : "Generating your reviewer"}
+                  : "Building your notebook"}
               </p>
               {batchProgress && (
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
@@ -479,12 +514,12 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
           <Card className="rounded-2xl border-amber-200 bg-amber-50 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base text-amber-900">
-                Reviewer is stale
+                Notebook needs an update
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-amber-800">
-                New source changes were detected. Regenerate to refresh this reviewer.
+                New material was added. Update the notebook to include it.
               </p>
             </CardContent>
           </Card>
@@ -498,9 +533,13 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
               onClick={handleExportReviewer}
               disabled={isGenerating}
             >
-              Export Reviewer
+              Export Notebook
             </Button>
           </div>
+        )}
+
+        {isReviewerVisible && (reviewerContent?.quiz?.length ?? 0) > 0 && !optionsView && (
+          <PracticeSummary projectId={projectId} refreshToken={practiceRefreshToken} />
         )}
 
         {!optionsView && (
@@ -508,15 +547,17 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
             <ReviewerTabs
               content={reviewerContent}
               projectId={projectId}
+              reviewerVersion={reviewer!.version}
               onRegenerateSection={() => handleShowMultiSource()}
               isRegeneratingSection={generationMode === "section" && isGenerating}
+              onQuizAttemptSaved={() => setPracticeRefreshToken((value) => value + 1)}
             />
           ) : (
             <Card className="rounded-2xl shadow-sm">
               <CardContent className="space-y-4 p-6">
                 <EmptyState
-                  title="Reviewer not ready"
-                  description="Click 'Generate' on a source to start building your reviewer."
+                  title="Notebook not started"
+                  description="Choose course material to build a cited study notebook."
                 />
                 {processedCount >= 2 ? (
                   <Button
@@ -525,10 +566,10 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
                     className="w-full rounded-xl"
                   >
                     {!canGenerate
-                      ? "Add Sources First"
+                      ? "Add Materials First"
                       : isGenerating
-                      ? "Generating..."
-                      : "Generate from Multiple Sources"}
+                      ? "Building..."
+                      : "Build from Multiple Materials"}
                   </Button>
                 ) : (
                   <Button
@@ -540,10 +581,10 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
                     className="w-full rounded-xl"
                   >
                     {!canGenerate
-                      ? "Add Sources First"
+                      ? "Add Materials First"
                       : isGenerating
-                      ? "Generating..."
-                      : "Generate Reviewer"}
+                      ? "Building..."
+                      : "Build Notebook"}
                   </Button>
                 )}
               </CardContent>
@@ -568,6 +609,7 @@ export function ReviewerWorkspace({ projectId }: { projectId: string }) {
         currentStage={currentStage}
         hasReviewer={Boolean(reviewerContent)}
       />
+      </div>
     </div>
   );
 }

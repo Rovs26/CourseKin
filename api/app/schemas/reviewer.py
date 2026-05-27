@@ -19,6 +19,7 @@ class QuizItem(BaseModel):
     choices: list[str]
     answer: str
     rationale: str
+    topic: Optional[str] = None
 
 
 class FlashcardItem(BaseModel):
@@ -158,3 +159,72 @@ class ReviewerFeedbackResponse(BaseModel):
     comment: Optional[str] = None
     created_at: str
     updated_at: str
+
+
+class QuizAttemptAnswerRequest(BaseModel):
+    item_index: int = Field(ge=0, le=50)
+    selected_answer: str = Field(min_length=1, max_length=2000)
+
+
+class QuizAttemptRequest(BaseModel):
+    reviewer_version: int = Field(ge=1)
+    answers: list[QuizAttemptAnswerRequest] = Field(min_length=1, max_length=50)
+    duration_seconds: Optional[int] = Field(default=None, ge=0, le=86400)
+
+    @field_validator("answers")
+    @classmethod
+    def validate_unique_items(
+        cls, v: list[QuizAttemptAnswerRequest]
+    ) -> list[QuizAttemptAnswerRequest]:
+        indices = [answer.item_index for answer in v]
+        if len(indices) != len(set(indices)):
+            raise ValueError("Quiz answers must not contain duplicate questions")
+        return v
+
+
+class QuizAttemptResult(BaseModel):
+    item_index: int
+    question: str
+    selected_answer: str
+    correct_answer: str
+    rationale: str
+    is_correct: bool
+    topic: Optional[str] = None
+    evidence: Optional[EvidenceItem] = None
+
+
+class QuizAttemptResponse(BaseModel):
+    id: str
+    project_id: str
+    reviewer_version: int
+    results: list[QuizAttemptResult]
+    total_questions: int
+    correct_answers: int
+    score_percent: int
+    duration_seconds: Optional[int] = None
+    created_at: str
+
+
+class QuizFocusTopic(BaseModel):
+    topic: str
+    questions_answered: int
+    correct_answers: int
+    score_percent: int
+    missed_count: int
+    status: Literal["needs_review", "practicing", "recall_improving"]
+    recommended_action: str
+
+
+class QuizPracticeSummaryResponse(BaseModel):
+    total_attempts: int
+    total_answered: int
+    total_correct: int
+    latest_score_percent: Optional[int] = None
+    best_score_percent: Optional[int] = None
+    practice_signal: Literal["no_practice", "early", "needs_review", "building"]
+    practice_signal_label: str
+    signal_note: str
+    next_action: str
+    focus_topics: list[QuizFocusTopic]
+    focus_questions: list[QuizAttemptResult]
+    recent_attempts: list[QuizAttemptResponse]
