@@ -199,6 +199,29 @@ class TaskFocusSession(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class NotebookCard(Base):
+    __tablename__ = "notebook_cards"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    source_stream_entry_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, index=True
+    )
+    origin: Mapped[str] = mapped_column(String, nullable=False, default="manual")
+    front: Mapped[str] = mapped_column(Text, nullable=False)
+    back: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    ease_factor: Mapped[float] = mapped_column(Float, nullable=False, default=2.5)
+    interval_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    repetitions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    due_date: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    last_reviewed_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_quality: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class CourseStreamEntry(Base):
     __tablename__ = "course_stream_entries"
 

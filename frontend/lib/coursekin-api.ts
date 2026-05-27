@@ -819,6 +819,110 @@ export function getTaskStats() {
   });
 }
 
+// ─── Notebook (study cards + spaced repetition) ──────────────────────
+
+export type NotebookCardOrigin =
+  | "manual"
+  | "stream_entry"
+  | "quiz_gap"
+  | "ai_generated";
+
+export type NotebookCard = {
+  id: string;
+  project_id: string;
+  user_id: string;
+  source_stream_entry_id: string | null;
+  origin: NotebookCardOrigin;
+  front: string;
+  back: string | null;
+  tags: string[];
+  ease_factor: number;
+  interval_days: number;
+  repetitions: number;
+  due_date: string | null;
+  last_reviewed_at: string | null;
+  last_quality: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function listNotebookCards(
+  projectId: string,
+  options: { onlyDue?: boolean; tag?: string } = {}
+) {
+  const params = new URLSearchParams();
+  if (options.onlyDue) params.set("only_due", "true");
+  if (options.tag) params.set("tag", options.tag);
+  const qs = params.toString();
+  return apiRequest<{ items: NotebookCard[]; total: number; due_now: number }>(
+    `/projects/${projectId}/notebook/cards${qs ? `?${qs}` : ""}`,
+    { method: "GET" }
+  );
+}
+
+export function createNotebookCard(
+  projectId: string,
+  input: {
+    front: string;
+    back?: string | null;
+    tags?: string[];
+    source_stream_entry_id?: string | null;
+  }
+) {
+  return apiRequest<NotebookCard>(`/projects/${projectId}/notebook/cards`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateNotebookCard(
+  projectId: string,
+  cardId: string,
+  input: Partial<{ front: string; back: string | null; tags: string[] }>
+) {
+  return apiRequest<NotebookCard>(
+    `/projects/${projectId}/notebook/cards/${cardId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }
+  );
+}
+
+export function deleteNotebookCard(projectId: string, cardId: string) {
+  return apiRequest<void>(`/projects/${projectId}/notebook/cards/${cardId}`, {
+    method: "DELETE",
+  });
+}
+
+export function reviewNotebookCard(
+  projectId: string,
+  cardId: string,
+  quality: number
+) {
+  return apiRequest<NotebookCard>(
+    `/projects/${projectId}/notebook/cards/${cardId}/review`,
+    {
+      method: "POST",
+      body: JSON.stringify({ quality }),
+    }
+  );
+}
+
+export function convertStreamEntryToCard(
+  projectId: string,
+  entryId: string,
+  back?: string
+) {
+  return apiRequest<NotebookCard>(
+    `/projects/${projectId}/stream/entries/${entryId}/convert-to-card`,
+    {
+      method: "POST",
+      body: JSON.stringify({ back: back ?? null }),
+    }
+  );
+}
+
 export function getCalendarAgenda(startDate: string, endDate: string) {
   return apiRequest<CalendarAgenda>(
     `/planning/calendar?start_date=${startDate}&end_date=${endDate}&reference_date=${localCalendarDate()}`,
