@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.core.rate_limit import limiter
-from app.api.routes import health, projects, sources, jobs, reviewer, planning, templates, admin, users, billing
+from app.api.routes import health, projects, sources, jobs, reviewer, planning, stream, templates, admin, users, billing
 from app.db.database import Base, engine
 from app.db import models  # noqa: F401 — imported so SQLAlchemy registers all tables
 
@@ -107,6 +107,7 @@ app.include_router(sources.router)
 app.include_router(jobs.router)
 app.include_router(reviewer.router)
 app.include_router(planning.router)
+app.include_router(stream.router)
 app.include_router(templates.router)
 app.include_router(admin.router)
 app.include_router(users.router)

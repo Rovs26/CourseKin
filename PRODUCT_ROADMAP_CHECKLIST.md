@@ -156,6 +156,40 @@ CourseKin should implement these ideas in its existing SaaS foundation rather th
 - Treat comments/attachments as design input for a persistent course stream, not as an existing stream implementation.
 - Keep lecture recording and live transcription deferred until privacy, consent, retention, deletion, and cost requirements are complete.
 
+### May 27, 2026: Course Desk UX Reset and Revised v2 Delivery
+
+**Status:** Adopted for the next v2 implementation slices.
+
+The working course-companion capabilities are useful, but the current reviewer/project dashboard no longer expresses the intended student experience. CourseKin should now be designed as a student's **Course Desk**: a calm daily workspace organized around classes, deadlines, questions, materials, and preparation rather than generated artifacts.
+
+#### Experience Model
+
+- **Today:** what needs attention next, including confirmed obligations and preparation sessions.
+- **Courses:** the student's enrolled course spaces, each carrying its own context and memory.
+- **Course Room:** chronological capture of class notes, questions, reflections, and attached materials.
+- **Course Plan:** syllabus obligations, confirmed deadlines, preparation runway, and reminder preferences.
+- **Materials:** syllabus, readings, briefs, links, and later photo or audio sources.
+- **Notebook:** the existing cited reviewer surface, positioned for the future living reviewer document.
+
+The supported v2 loop is:
+
+`Add course -> add syllabus/material -> confirm extracted dates -> plan preparation -> capture class questions/notes -> get cited help -> build a study notebook`
+
+#### UX and Brand Rules
+
+- Use a flat, calm interface with warm paper neutrals, ink text, and one forest accent; avoid gradients, glassmorphism, and purple/blue startup styling.
+- Use plain English copy and student tasks, not generic feature-card language or inflated marketing claims.
+- Only expose real, functioning destinations in navigation. Calendar, Library, Practice, and Progress appear only when their useful product surfaces exist.
+- Treat the v3 living reviewer as the future notebook experience, not as a chat panel added prematurely to the existing layout.
+
+#### Active Blockers and Launch Trust Gates
+
+- A local browser syllabus upload is currently blocked because the private R2 uploads bucket does not return an allowed CORS response for `http://localhost:3000` on presigned `PUT` uploads. Configure and acceptance-test approved local, staging, and production origins before considering upload workflows complete.
+- Audit rate limiting across application endpoints; Clerk sign-in abuse controls belong in the Clerk/Turnstile configuration, while CourseKin API routes require their own limits. Target at most 5 sensitive auth-adjacent attempts in 15 minutes where CourseKin controls the endpoint.
+- Scan the codebase and Git history for committed credentials, move all secrets to environment configuration, and rotate any exposed provider credential before public release.
+- Complete input-size, malformed-payload, and sanitization review for every user-content surface, including syllabus, stream, feedback, and coaching endpoints.
+- Complete a security audit report, privacy policy selection or review (for example Termly or iubenda), terms of use, data/compliance review, and an IP infringement/reporting process before public SaaS launch.
+
 ## v1: Current Foundation
 
 ### Completed SaaS Hardening Baseline
@@ -192,6 +226,7 @@ These items should be completed before accepting real paid users.
 - [ ] Configure Railway generation worker service using `api/railway.worker.toml`.
 - [ ] Configure Vercel frontend deployment with Node.js 20.19 or newer.
 - [ ] Configure Cloudflare R2 uploads bucket and `temp/` lifecycle cleanup.
+- [ ] Configure R2 browser-upload CORS for approved local, staging, and production frontend origins; current localhost syllabus uploads fail before this is set.
 - [ ] Configure backup bucket and complete one backup/restore rehearsal.
 - [ ] Set up domains, TLS, WAF rules, and basic bot controls.
 
@@ -219,6 +254,9 @@ These items should be completed before accepting real paid users.
 - [ ] Complete live SSRF defense review, including outbound network controls against DNS rebinding.
 - [ ] Confirm signed DPAs and subprocessor records.
 - [ ] Confirm production retention and backup-deletion procedures match the privacy policy.
+- [ ] Scan repository and Git history for credentials, rotate any exposed secret, and verify secrets are environment-only.
+- [ ] Audit endpoint throttling, input sanitization, malformed/oversized payload rejection, and Clerk sign-in protections.
+- [ ] Publish reviewed terms, privacy/data-compliance disclosures, and an IP infringement/reporting process.
 - [ ] Add incident response contacts and production alert recipients.
 - [ ] Run a launch security review before paid traffic.
 
@@ -252,6 +290,7 @@ Goal: establish the ongoing student-to-course relationship and prevent last-minu
 - [x] Implement CourseKin-owned confirmed obligation records and confirmation-only `.ics` calendar export.
 - [x] Implement preparation milestones based on confirmed obligations.
 - [x] Add initial in-app reminder preferences and dashboard prompts for upcoming preparation milestones.
+- [x] Add a private Calendar and Tasks workspace showing confirmed deadlines, preparation sessions, and student-created course tasks.
 - [ ] Add consent-based outbound reminder delivery channels only after in-app reminder usefulness is validated.
 - [x] Add an assessment runway showing due dates, missing materials, recommended preparation, and session progress; reserve readiness claims for measured mastery.
 - [x] Add an initial workload balancer that distributes bounded preparation and project steps under a student-selected daily capacity.
@@ -262,10 +301,11 @@ Goal: establish the ongoing student-to-course relationship and prevent last-minu
 
 Goal: keep the student's actual learning journey organized inside each course.
 
-- [ ] Add a private chronological course stream between the student and AI.
-- [ ] Support typed notes, questions, uploaded readings, and references to assessments or rubric items.
-- [ ] Add a confusion inbox and learning reflection prompts inside the stream.
-- [ ] Add citation-grounded course Q&A with accessible learning modes such as simpler explanation, analogy, worked example, and practice prompt.
+- [x] Add a student-owned private chronological course stream foundation for typed notes and questions.
+- [x] Add AI reply interactions grounded in course evidence and clearly separate them from student entries.
+- [x] Support uploaded readings and references to assessments or rubric items in the stream.
+- [x] Add a confusion inbox and learning reflection prompts inside the stream.
+- [x] Add citation-grounded course Q&A with accessible learning modes such as simpler explanation, step-by-step reasoning, and example-first explanation.
 - [ ] Let students select accumulated stream content when generating summaries, reviewers, flashcards, or preparation plans.
 - [ ] Add OCR/photo and audio/transcript inputs only through staged privacy- and quality-reviewed releases.
 
@@ -275,22 +315,22 @@ Goal: keep the student's actual learning journey organized inside each course.
 
 Goal: support bounded assignments and short papers without expanding prematurely into heavy content production.
 
-- [ ] Add a rubric-aware assignment coach that extracts deliverables, dates, criteria, formatting expectations, and a completion checklist.
+- [x] Add a rubric-aware assignment coach that uses confirmed requirements and evidence to prepare a completion checklist.
 - [ ] Connect confirmed assignment milestones to task planning and workload balancing.
-- [ ] Add draft feedback mode for light assignments and short papers: requirement coverage, clarity, missing support, and revision guidance.
-- [ ] Add office-hours preparation from confusion items, weak topics, and draft blockers.
-- [ ] Clearly communicate product limits for presentations, thesis-level work, complex data-heavy papers, and undefined group-authoring workflows.
+- [x] Add draft feedback mode for light assignments and short papers: requirement coverage, clarity, missing support, and revision guidance.
+- [x] Add office-hours preparation from course evidence and draft blockers.
+- [x] Clearly communicate product limits for presentations, thesis-level work, complex data-heavy papers, and undefined group-authoring workflows.
 - [ ] Do not build a restrictive course AI-permission tracking feature as part of the student experience.
 
 ### P5: Learning and Mastery Loop
 
 Goal: move from collected course content to measurable learning improvement.
 
-- [ ] Store quiz attempts, answers, scores, and time spent.
-- [ ] Add explanations for wrong answers with citations to original material.
+- [x] Store notebook quiz attempts, selected answers, server-computed scores, and time spent.
+- [x] Show explanations for wrong notebook-quiz answers with citations to original material.
 - [ ] Automatically create remedial flashcards from missed questions.
-- [ ] Track mastery by topic or concept.
-- [ ] Add a weak-topics view and recommended next actions.
+- [~] Track recall performance by topic or concept. Source-grounded quiz topics now support focus summaries; validated mastery remains future work.
+- [x] Add a Focus Areas view and recommended next actions from source-grounded quiz topics.
 - [ ] Add spaced repetition scheduling for flashcards.
 - [ ] Add confidence self-rating before and after practice sessions.
 
@@ -389,6 +429,66 @@ Goal: broaden course input and institutional connectivity only after the core co
 - [ ] Add retention cleanup jobs for stale temporary uploads, expired jobs, and deletion workflows.
 - [ ] Add disaster recovery runbook evidence after each restore rehearsal.
 
+## Adopted v2 Course Desk Delivery Sequence
+
+This sequence supersedes the UI delivery order below while preserving completed engineering checkpoints as capability history.
+
+### V2-R0: Workflow Unblock and Trust Baseline
+
+- [ ] Configure R2 CORS and validate the complete syllabus upload, extraction, review, confirmation, and export flow in the browser.
+- [ ] Run credential/code/history scan and document rotations or remediation.
+- [ ] Audit endpoint throttling and content payload validation; document remaining vulnerabilities.
+- [ ] Define the pre-launch legal and data-compliance work products.
+
+### V2-R1: Course Desk UX Foundation
+
+- [~] Replace generic dashboard/project framing with Today, Courses, Course Room, Plan, Materials, and Notebook framing.
+- [~] Establish flat brand tokens, clear typography, plain-language UI copy, and real-workflow empty states.
+- [ ] Validate the new shell with at least one complete existing-course journey before expanding the information architecture.
+
+### V2-R2: Planning and Materials Journey
+
+- [x] Make syllabus intake, confirmed obligations, calendar export, and preparation runway feel like one guided course-plan flow.
+- [x] Make material type, processing state, evidence availability, and upload failure recovery understandable to students.
+- [ ] Complete browser PDF-upload acceptance after the R2 bucket CORS policy is configured.
+
+### V2-R3: Course Room and Notebook Journey
+
+- [x] Recompose the existing private stream, confusion inbox, cited answers, and coaching into a coherent Course Room.
+- [x] Reframe cited reviewer generation as a student Notebook fed by selected course materials and connected visibly to the Room.
+- [ ] Let students intentionally include selected Room entries in Notebook generation; the current Notebook does not automatically use saved room context.
+
+**May 27, 2026 Room-to-Notebook checkpoint:** Room now presents capture, open questions, cited answers, and bounded coursework guidance as one student workflow with a direct path to Notebook. Notebook states that it builds from selected processed materials and does not yet absorb Room notes or questions automatically. A living document editor and real-time lecture capture remain v3 work.
+
+### V2-R4: Mastery and Pilot Validation
+
+- [~] Add practice history, mistake explanations, weak-topic guidance, and readiness indicators only after the core desk journey tests well. Quiz history, cited mistakes, and Focus Areas are implemented; validated mastery and readiness require coverage mapping and student validation.
+- [ ] Run an adult university-student pilot and measure usefulness, correction rates, return behavior, and trust.
+
+**May 27, 2026 practice-foundation checkpoint:** Notebook quizzes now save server-scored attempts, answers, elapsed time, and cited mistake review. The Notebook shows recent practice and next-focus questions, but deliberately labels its result as a practice signal rather than exam readiness. Topic-level mastery, remedial card generation, spaced repetition, and true readiness require later topic/coverage mapping and student validation.
+
+**May 27, 2026 Focus Areas checkpoint:** Newly generated Notebook questions include a concise topic label supported by the same cited course material used for the question. Submitted attempts preserve those labels and group recent recall results into Focus Areas with recommended next actions. Older unlabelled practice attempts stay in history but are not retroactively classified. This is topic-focused practice guidance, not a mastery score or exam-readiness claim.
+
+### Next Tracked UX Task: Calendar Tab
+
+- [x] Add a real Calendar tab that shows confirmed course obligations and planned preparation sessions in one term view.
+- [x] Keep proposed syllabus dates outside the calendar until the student confirms them.
+- [x] Add private student-created course tasks with due date, priority, completion, export, and deletion coverage.
+- [x] Begin with the existing reviewed `.ics` export and in-app schedule; do not silently write to external calendars.
+
+**May 27, 2026 Calendar and Tasks checkpoint:** Calendar now combines confirmed syllabus deadlines, generated preparation sessions, and student-created course tasks across courses. Tasks can be created, completed, reopened, or removed from a private course-linked task panel; they are included in account export and deletion paths. AI extraction still creates reviewable obligations rather than silent tasks or calendar entries.
+
+### Next High-Priority Capability: Consent-Governed Audio to AI
+
+- [ ] Design the capture consent step, visible recording state, deletion controls, retention window, file-duration limits, and cost ceilings before enabling audio uploads.
+- [ ] Implement an asynchronous first pipeline only after those controls are approved: student starts capture or uploads permitted audio, Whisper transcribes it, student reviews the transcript, then explicitly chooses AI summary, notes, questions, or tasks.
+- [ ] Treat transcript-derived tasks and deadlines as proposals that require confirmation before Calendar placement.
+- [ ] Defer live lecture assistance and continuous listening until consent, privacy, quality, and cost behavior are proven with the asynchronous pipeline.
+
+### Launch Gate
+
+- [ ] Complete upload/infrastructure acceptance, security audit, legal/privacy/data-compliance/IP review, billing acceptance, and production smoke testing before accepting paid public users.
+
 ## Recommended Version Roadmap
 
 ### v1 Release Gate: Launch Confidence
@@ -421,8 +521,10 @@ Goal: broaden course input and institutional connectivity only after the core co
 - [x] Add reviewed `.ics` calendar export without granting calendar write access.
 - [x] Add assessment runway, preparation milestones, and initial workload balancing.
 - [x] Add in-app reminder preferences and dashboard prompts for planned sessions.
-- [ ] Add consent-based outbound reminder delivery and optional reviewed calendar synchronization.
-- [ ] Measure confirmed syllabus extraction accuracy and student return before upcoming assessments.
+- [x] Add a private Calendar and Tasks workspace using confirmed dates, preparation sessions, and student-created tasks.
+- [x] Add measurement instrumentation for confirmed syllabus extraction corrections and pre-assessment preparation return.
+- [ ] Run the real-student pilot and evaluate the collected validation metrics before expanding reminders or calendar access.
+- [ ] Deferred pending pilot: Add consent-based outbound reminder delivery and optional reviewed calendar synchronization.
 
 **May 25, 2026 implementation checkpoint:** The first v2b slice adds optional course profile fields to new and existing workspaces; labels sources as syllabus, lecture notes, assignment briefs, or study materials; allows older uploads to be reclassified; queues syllabus obligation extraction into proposed records; requires student editing and confirmation before export; and generates `.ics` files only from confirmed dated obligations. It deliberately does not create external calendar events, reminders, or readiness plans yet.
 
@@ -430,30 +532,53 @@ Goal: broaden course input and institutional connectivity only after the core co
 
 **May 26, 2026 reminder checkpoint:** The next v2b slice adds per-course controls for dashboard reminder visibility and lead time, plus a user-scoped dashboard feed of due or upcoming planned sessions. This is an in-app prompt surface only: it does not request browser notification permission, send email or push alerts, or write suggested sessions to a calendar.
 
+**May 26, 2026 validation checkpoint:** Phase B implementation is complete for pilot use. New syllabus reviews retain the original AI proposal and the student's first review decision, and an internal validation view reports correction rates plus an early-preparation proxy based on completing a planned session before a confirmed assessment due date. Measuring student return and usefulness still requires real university-student use; outbound reminder channels and write-access calendar synchronization remain deferred until that evidence exists.
+
+**May 27, 2026 Calendar and Tasks checkpoint:** A new workspace calendar displays only confirmed obligation dates alongside preparation sessions and the student's own course tasks. Course tasks are stored in CourseKin, owner-scoped, manageable without external calendar permission, and covered by account export/deletion. AI-created or transcript-derived task proposals remain a gated follow-on.
+
 ### v2 Phase C: Private Course Stream and Coursework Coach
 
 **Objective:** Let each course remember learning activity and support bounded coursework preparation.
 
-- [ ] Add the private course compilation stream for notes, questions, files, and reflections.
-- [ ] Add confusion inbox, cited course answers, accessible explanation modes, and source separation.
-- [ ] Add rubric-aware assignment coaching, draft feedback for short work, and office-hours preparation.
+- [x] Add the private course compilation stream foundation for typed notes and questions.
+- [x] Add reflections and references to existing course files/materials in the private stream.
+- [x] Add confusion inbox, cited course-material answers, and explicit course-only source separation.
+- [x] Add accessible explanation modes while preserving citation grounding.
+- [x] Add rubric-aware assignment coaching, draft feedback for short work, and office-hours preparation.
 - [ ] Validate usefulness with adult university students across one academic term.
+
+**May 26, 2026 course-stream checkpoint:** The first v2c slice adds an owner-scoped private stream inside each course for typed notes and questions, with editing, deletion, account export, and deletion coverage. It is a student capture surface only: saving an entry does not ask AI for an answer or send stream text for generation. Files, photos, audio/transcription, AI replies, cited Q&A, and collaboration remain staged future work.
+
+**May 26, 2026 material-link checkpoint:** The second v2c slice adds reflection entries and allows any stream entry to reference course materials already stored as CourseKin sources, including uploaded PDFs, pasted text, or URLs. Links are owner-scoped, included in account export, and removed when an entry or its source is deleted. Direct photo/audio capture, transcription, AI answers, and collaboration remain deferred.
+
+**May 26, 2026 confusion-inbox checkpoint:** The third v2c slice turns saved questions into an open/resolved confusion inbox. Students may explicitly request an answer only from processed materials attached to that question; answers are queued under existing quota controls and displayed only when at least one attached source chunk validates as cited evidence. The UI identifies the response as course-material-only and does not perform web lookup. Explanation modes and broader coursework coaching remain next steps.
+
+**May 26, 2026 coursework-coach checkpoint:** The final engineered v2c slice adds student-selected explanation styles for cited answers and a separate coursework-coaching request path. Coaching is limited to guidance for confirmed light assignments, short papers, and office-hours preparation; assignment and draft requests require rubric evidence or an attached assignment brief, and all output must cite selected processed course material. The interface and terms explicitly exclude finished submissions, presentations or slide decks, thesis-level writing, complex data-heavy papers, and group-paper authorship. Real-term usefulness validation remains pending adult university-student use.
 
 ### v2 Phase D: Mastery and Proactive Preparation
 
 **Objective:** Make the companion increasingly useful as assessments approach.
 
-- [ ] Implement attempts, scoring, mistake explanations, weak-topic mastery, and spaced practice.
-- [ ] Add targeted reminders, preparation recommendations, meaningful streaks, and readiness indicators.
+- [~] Implement attempts, scoring, mistake explanations, topic focus guidance, and spaced practice. Notebook quiz attempts, scoring, cited mistake review, and Focus Areas are implemented; validated mastery and spaced practice remain.
+- [~] Add targeted reminders, preparation recommendations, meaningful streaks, and readiness indicators. Preparation prompts exist and Notebook now shows a non-readiness practice signal; validated readiness and streaks remain.
 - [ ] Add adaptive practice exams after course evidence and mastery signals are reliable.
 - [ ] Enable paid plans only after billing acceptance passes and paid-value hypotheses are tested.
+
+### v2 Phase E: Gated Capture Pipeline
+
+**Objective:** Test the differentiating lecture-to-study loop without creating an unsafe recording feature.
+
+- [ ] Specify affirmative recording consent, visible capture controls, deletion and retention, allowed file types and duration, transcription cost limits, and institution/privacy guidance.
+- [ ] Implement asynchronous audio capture or upload, Whisper transcription, transcript review, and selected AI actions after the controls above are accepted.
+- [ ] Require review before transcript-extracted tasks or dates enter Calendar and Tasks.
+- [ ] Measure transcription usefulness, correction rates, privacy comfort, and cost before live capture is considered.
 
 ### v3: Living Reviewer and Expansion
 
 **Objective:** Build the ambitious evolving course artifact and consider high-complexity integrations only after v2 value is proven.
 
 - [ ] Build the document-style living reviewer with source-linked change history.
-- [ ] Add OCR/photo workflows and later consent-governed transcription if demand justifies it.
+- [ ] Expand validated asynchronous audio/OCR capture into responsive living-reviewer workflows only if v2 evidence justifies it.
 - [ ] Explore LMS import once course/task/calendar behavior is stable.
 - [ ] Evaluate collaboration, institutional plans, and broader student features only after retention is proven.
 
@@ -465,7 +590,7 @@ Keep these ideas visible, but defer implementation until trusted output and mast
 - [defer] Social feed, public marketplace, or broad creator community.
 - [defer] Native iOS or Android applications before responsive web study sessions retain users.
 - [defer] AI podcasts or voice tutoring before citations and mastery tracking are reliable.
-- [defer] Lecture audio/video ingestion before document-based workflows show repeated demand.
+- [defer] Continuous listening or live lecture assistance before the consent-governed asynchronous audio pipeline is safe, useful, and affordable.
 - [defer] Full presentation or PowerPoint production before the core study and coursework companion retains students.
 - [defer] Thesis-level, data-intensive, or long group-paper generation before research and collaboration requirements are defined.
 - [defer] Broad personal-growth or hobby tracking before academic companion retention is proven.
@@ -517,7 +642,7 @@ Use this section for ideas to evaluate together before implementation.
 
 | Idea | Target User Problem | Differentiation Value | Effort | Priority | Decision |
 | --- | --- | --- | --- | --- | --- |
-| Integrate the future to-do/calendar project with syllabus obligations | Students lose track of deadlines and prepare too late | Connects planning with learning support | To assess after project review | Discovery | Preserve for evaluation |
+| Integrate the future to-do/calendar project with syllabus obligations | Students lose track of deadlines and prepare too late | Connects planning with learning support | High | v2 delivered foundation | Calendar and private course tasks implemented; AI proposals remain next |
 | Course-aware companion workspace | A one-time reviewer does not support an ongoing semester | Establishes a student-to-app relationship around each class | High | v2 direction | Accepted for v2 |
 | Private per-course compilation stream | Notes, photos, files, recordings, and questions are fragmented | Creates one course memory that can produce study outputs | High | v2 direction | Accepted for v2 |
 | Rubric-aware assignment coach and draft feedback | Students need help understanding and completing bounded coursework | Joins assessment requirements, planning, and learning support | High | v2 must-have | Accepted for v2 |
@@ -526,6 +651,7 @@ Use this section for ideas to evaluate together before implementation.
 | Accessible explanation modes | Students need concepts presented in ways they can understand | Improves inclusion and usefulness of course help | Medium | v2 direction | Accepted for v2 |
 | Living document-style reviewer beside the course stream | Chat outputs are harder to study and refine over time | Creates an evolving, source-linked learning document | Very high | v3 must-have direction | Schedule for v3 planning |
 | Meaningful study streaks and later personal-growth features | Students need motivation beyond one assessment | Could increase consistency when tied to learning effort | Medium to high | Later exploration | Keep academic-first |
+| Consent-governed audio to transcript to AI actions | Students need lecture material captured into their study workflow | Connects class experience to notes, questions, and reviewed tasks | Very high | v2 gated next | Prioritize after capture/privacy/cost controls |
 
 ### Decision Notes
 
@@ -534,7 +660,7 @@ Use this section for ideas to evaluate together before implementation.
 - [x] Treat rubric-aware assignment support, assessment runway, and workload balancing as v2 must-have directions.
 - [x] Include confusion capture, office-hours preparation, draft feedback for short work, source separation, and accessible learning modes in v2 scope.
 - [x] Exclude a student-facing AI permission/policy tracker feature from the intended product experience.
-- [ ] Review the owner's to-do/calendar project when it is provided before choosing an integration design.
+- [x] Review the owner's to-do/calendar project and preserve compatible behavior through CourseKin-owned models.
 - [x] Reorder the v2 roadmap around course foundation and the private course stream after trusted output.
 - [ ] Define v2 success metrics before implementation.
 - [ ] Decide what belongs in free versus paid plans.

@@ -8,6 +8,8 @@ ObligationType = Literal["quiz", "exam", "assignment", "project", "paper", "read
 ObligationStatus = Literal["proposed", "confirmed", "dismissed"]
 Confidence = Literal["high", "medium", "low"]
 MilestoneStatus = Literal["planned", "completed", "skipped"]
+TaskPriority = Literal["low", "medium", "high"]
+TaskStatus = Literal["open", "completed"]
 
 
 class SyllabusExtractionRequest(BaseModel):
@@ -160,3 +162,123 @@ class PreparationReminderListResponse(BaseModel):
     items: list[PreparationReminderResponse]
     total: int
     reference_date: str
+
+
+class CourseTaskCreateRequest(BaseModel):
+    title: str
+    notes: Optional[str] = None
+    due_date: Optional[str] = None
+    priority: TaskPriority = "medium"
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Task title cannot be empty")
+        if len(value) > 200:
+            raise ValueError("Task title must be 200 characters or fewer")
+        return value
+
+    @field_validator("notes")
+    @classmethod
+    def validate_notes(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) > 2000:
+            raise ValueError("Task notes must be 2000 characters or fewer")
+        return value or None
+
+    @field_validator("due_date")
+    @classmethod
+    def validate_task_due_date(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not value.strip():
+            return None
+        date.fromisoformat(value)
+        return value
+
+
+class CourseTaskUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    notes: Optional[str] = None
+    due_date: Optional[str] = None
+    priority: Optional[TaskPriority] = None
+    status: Optional[TaskStatus] = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            raise ValueError("Task title cannot be empty")
+        value = value.strip()
+        if not value:
+            raise ValueError("Task title cannot be empty")
+        if len(value) > 200:
+            raise ValueError("Task title must be 200 characters or fewer")
+        return value
+
+    @field_validator("notes")
+    @classmethod
+    def validate_notes(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) > 2000:
+            raise ValueError("Task notes must be 2000 characters or fewer")
+        return value or None
+
+    @field_validator("due_date")
+    @classmethod
+    def validate_task_due_date(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not value.strip():
+            return None
+        date.fromisoformat(value)
+        return value
+
+
+class CourseTaskResponse(BaseModel):
+    id: str
+    project_id: str
+    project_title: str
+    course_code: Optional[str] = None
+    title: str
+    notes: Optional[str] = None
+    due_date: Optional[str] = None
+    priority: TaskPriority
+    status: TaskStatus
+    origin: Literal["student"]
+    completed_at: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class CourseTaskListResponse(BaseModel):
+    items: list[CourseTaskResponse]
+    total: int
+
+
+class CalendarAgendaItemResponse(BaseModel):
+    id: str
+    item_type: Literal["deadline", "preparation_session", "task"]
+    project_id: str
+    project_title: str
+    course_code: Optional[str] = None
+    title: str
+    date: str
+    status: str
+    details: Optional[str] = None
+    priority: Optional[TaskPriority] = None
+    estimated_minutes: Optional[int] = None
+    obligation_id: Optional[str] = None
+
+
+class CalendarAgendaResponse(BaseModel):
+    items: list[CalendarAgendaItemResponse]
+    unscheduled_tasks: list[CourseTaskResponse]
+    start_date: str
+    end_date: str
+    reference_date: str
+    open_tasks: int
+    overdue_tasks: int
+    upcoming_deadlines: int

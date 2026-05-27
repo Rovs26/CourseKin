@@ -1,10 +1,16 @@
 import type { InstrumentationOnRequestError } from "next/dist/server/instrumentation/types";
 
 export async function register() {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+
+  if (!dsn) {
+    return;
+  }
+
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const Sentry = await import("@sentry/nextjs");
     Sentry.init({
-      dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      dsn,
       environment: process.env.NEXT_PUBLIC_APP_ENV ?? "development",
       tracesSampleRate: 0.1,
     });
@@ -13,7 +19,7 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "edge") {
     const Sentry = await import("@sentry/nextjs");
     Sentry.init({
-      dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      dsn,
       environment: process.env.NEXT_PUBLIC_APP_ENV ?? "development",
       tracesSampleRate: 0.1,
     });
@@ -25,6 +31,10 @@ export const onRequestError: InstrumentationOnRequestError = async (
   request,
   context
 ) => {
+  if (!process.env.NEXT_PUBLIC_SENTRY_DSN) {
+    return;
+  }
+
   const Sentry = await import("@sentry/nextjs");
   Sentry.captureRequestError(err, request, context);
 };

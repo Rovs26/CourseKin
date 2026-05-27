@@ -1,5 +1,10 @@
 "use client";
 
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, FileCheck2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 import { EmptyState } from "@/components/states/empty-state";
 import { SourceUploadPanel } from "@/components/sources/source-upload-panel";
@@ -7,9 +12,11 @@ import { SourceList } from "@/components/sources/source-list";
 import { createTextSource, presignAndUploadPDF, createURLSource } from "@/lib/coursekin-api";
 import { useProject } from "@/hooks/use-project";
 import { useSources } from "@/hooks/use-sources";
+import { routes } from "@/lib/routes";
 import type { SourcePurpose } from "@/types/source";
 
 export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
+  const searchParams = useSearchParams();
   const { project, isLoading: isProjectLoading, error: projectError } = useProject(projectId);
   const {
     sources,
@@ -23,6 +30,8 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
   const [isSubmittingPdf, setIsSubmittingPdf] = useState(false);
   const [pdfUploadPct, setPdfUploadPct] = useState<number | null>(null);
   const [isSubmittingUrl, setIsSubmittingUrl] = useState(false);
+  const defaultPurpose: SourcePurpose =
+    searchParams.get("add") === "syllabus" ? "syllabus" : "study_material";
 
   const isLoading = isProjectLoading || isSourcesLoading;
 
@@ -114,7 +123,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
   if (isLoading) {
     return (
       <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <p className="text-sm text-slate-500">Loading sources...</p>
+        <p className="text-sm text-slate-500">Loading materials...</p>
       </div>
     );
   }
@@ -122,7 +131,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
   if (projectError || sourcesError) {
     return (
       <EmptyState
-        title="Unable to load sources"
+        title="Unable to load materials"
         description={projectError ?? sourcesError ?? "Something went wrong."}
       />
     );
@@ -131,25 +140,78 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
   if (!project) {
     return (
       <EmptyState
-        title="Project not found"
-        description="This project does not exist in the current workspace."
+        title="Course not found"
+        description="This course does not exist in your workspace."
       />
     );
   }
 
   const isSubmitting = isSubmittingText || isSubmittingPdf || isSubmittingUrl;
+  const syllabusMaterials = sources.filter((source) => source.purpose === "syllabus");
+  const readySyllabi = syllabusMaterials.filter((source) => source.status === "processed");
+  const hasPendingSyllabus = syllabusMaterials.some(
+    (source) => source.status === "uploaded" || source.status === "processing"
+  );
   const submittingLabel = isSubmittingPdf
     ? pdfUploadPct !== null && pdfUploadPct < 100
       ? `Uploading PDF… ${pdfUploadPct}%`
       : "Extracting text from PDF…"
     : isSubmittingUrl
     ? "Fetching URL..."
-    : "Adding text source...";
+    : "Adding pasted text...";
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+    <div className="space-y-6">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ck-primary)]">
+          Materials
+        </p>
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
+          Bring in what this course is based on.
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+          Begin with a syllabus to plan dates, then add notes, readings, and assignment briefs
+          for cited help and your study notebook.
+        </p>
+      </div>
+
+      <Card className="rounded-2xl border-[var(--ck-primary-border)] bg-[var(--ck-primary-soft)]">
+        <CardContent className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center">
+          <div className="flex gap-3">
+            <FileCheck2 className="mt-0.5 h-5 w-5 shrink-0 text-[var(--ck-primary)]" />
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                {readySyllabi.length > 0
+                  ? "Your syllabus is ready for planning"
+                  : hasPendingSyllabus
+                    ? "Your syllabus is being processed"
+                    : "Start with the syllabus"}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                {readySyllabi.length > 0
+                  ? "Open Plan to extract proposed assessments and review every date before it is used."
+                  : hasPendingSyllabus
+                    ? "When processing finishes, you can extract proposed dates in Plan."
+                    : "Classify a PDF, URL, or pasted text as Course syllabus to begin semester planning."}
+              </p>
+            </div>
+          </div>
+          {readySyllabi.length > 0 && (
+            <Button asChild className="shrink-0">
+              <Link href={routes.coursePlan(projectId)}>
+                Open Plan
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
       <div className="space-y-3">
         <SourceUploadPanel
+          key={defaultPurpose}
+          defaultPurpose={defaultPurpose}
           onAddPdf={handleAddPdf}
           onAddUrl={handleAddUrl}
           onAddText={handleAddText}
@@ -162,7 +224,15 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
             ) : null}
 
             {submitError ? (
-              <p className="text-sm text-red-600">{submitError}</p>
+              <div className="space-y-2">
+                <p className="text-sm text-red-600">{submitError}</p>
+                {submitError.includes("secure file storage") && (
+                  <p className="text-sm text-slate-600">
+                    For now, choose the Text tab and paste your syllabus content so you can test
+                    date extraction while storage upload access is configured.
+                  </p>
+                )}
+              </div>
             ) : null}
           </div>
         )}
@@ -170,7 +240,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
 
       <div className="rounded-2xl border bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">Current Sources</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Course materials</h2>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
             {sources.length}
           </span>
@@ -181,11 +251,12 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
             <SourceList sources={sources} onSourceDeleted={refetchSources} allowPurposeEditing />
           ) : (
             <EmptyState
-              title="No sources yet"
-              description="Add a text source, PDF, or URL to start building this reviewer."
+              title="No materials yet"
+              description="Add a syllabus, PDF, note, or URL to begin this course."
             />
           )}
         </div>
+      </div>
       </div>
     </div>
   );

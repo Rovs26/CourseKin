@@ -12,7 +12,16 @@ from app.core.config import settings
 from app.core.rate_limit import request_ip_key
 from app.core.utils import utc_now_iso
 from app.db.database import Base
-from app.db.models import Job, Project, Reviewer, Source, SourceChunk, Subscription, UsageLog
+from app.db.models import (
+    CourseStreamEntry,
+    Job,
+    Project,
+    Reviewer,
+    Source,
+    SourceChunk,
+    Subscription,
+    UsageLog,
+)
 from app.services import job_queue_service
 from app.services.usage_service import record_usage, reserve_usage
 
@@ -225,6 +234,161 @@ def test_worker_routes_syllabus_extraction_jobs(monkeypatch, db):
     assert job_queue_service.process_next_queued_job() is True
     assert captured["job_id"] == "job-plan-1"
     assert captured["source_id"] == "syllabus-1"
+
+
+def test_worker_routes_course_question_answers_with_source_chunks(monkeypatch, db):
+    now = utc_now_iso()
+    db.add(
+        Project(
+            id="course-answer",
+            title="Course",
+            project_type="school",
+            age_bracket="college",
+            learning_mode="deep",
+            field_of_study="Chemistry",
+            source_mode="source-only",
+            user_id="user-1",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.add(
+        Source(
+            id="answer-source",
+            project_id="course-answer",
+            title="Acids Lecture",
+            type="text",
+            purpose="lecture_notes",
+            status="processed",
+            text="Strong acids dissociate completely.",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.add(
+        CourseStreamEntry(
+            id="question-1",
+            project_id="course-answer",
+            user_id="user-1",
+            entry_type="question",
+            content="Why are acids called strong?",
+            confusion_status="open",
+            answer_status="queued",
+            answer_job_id="job-answer-1",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.add(
+        Job(
+            id="job-answer-1",
+            project_id="course-answer",
+            source_id="answer-source",
+            user_id="user-1",
+            job_type="answer-course-question",
+            status="queued",
+            stage="queued",
+            generation_options={
+                "stream_entry_id": "question-1",
+                "source_ids": ["answer-source"],
+                "explanation_mode": "step_by_step",
+            },
+            attempts=0,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.commit()
+
+    session_factory = sessionmaker(bind=db.bind)
+    captured = {}
+    monkeypatch.setattr(job_queue_service, "SessionLocal", session_factory)
+    monkeypatch.setattr(
+        job_queue_service,
+        "run_course_answer_in_background",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    assert job_queue_service.process_next_queued_job() is True
+    assert captured["entry_id"] == "question-1"
+    assert captured["source_chunks"][0]["source_title"] == "Acids Lecture"
+    assert captured["source_chunks"][0]["id"] == "answer-source:chunk-0001"
+    assert captured["explanation_mode"] == "step_by_step"
+
+
+def test_worker_routes_coursework_coaching_with_source_chunks(monkeypatch, db):
+    now = utc_now_iso()
+    db.add(
+        Project(
+            id="course-coach",
+            title="Course",
+            project_type="school",
+            age_bracket="college",
+            learning_mode="deep",
+            field_of_study="Chemistry",
+            source_mode="source-only",
+            user_id="user-1",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.add(
+        Source(
+            id="coach-source",
+            project_id="course-coach",
+            title="Assignment Brief",
+            type="text",
+            purpose="assignment_brief",
+            status="processed",
+            text="Include two supported examples.",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.add(
+        CourseStreamEntry(
+            id="coach-entry-1",
+            project_id="course-coach",
+            user_id="user-1",
+            entry_type="coaching",
+            content="Help me make a checklist.",
+            coaching_mode="assignment_plan",
+            coaching_status="queued",
+            coaching_job_id="job-coach-1",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.add(
+        Job(
+            id="job-coach-1",
+            project_id="course-coach",
+            source_id="coach-source",
+            user_id="user-1",
+            job_type="coach-coursework",
+            status="queued",
+            stage="queued",
+            generation_options={"stream_entry_id": "coach-entry-1", "source_ids": ["coach-source"]},
+            attempts=0,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.commit()
+
+    session_factory = sessionmaker(bind=db.bind)
+    captured = {}
+    monkeypatch.setattr(job_queue_service, "SessionLocal", session_factory)
+    monkeypatch.setattr(
+        job_queue_service,
+        "run_course_coaching_in_background",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    assert job_queue_service.process_next_queued_job() is True
+    assert captured["entry_id"] == "coach-entry-1"
+    assert captured["source_chunks"][0]["source_title"] == "Assignment Brief"
+    assert captured["source_chunks"][0]["id"] == "coach-source:chunk-0001"
 
 
 def test_project_summaries_are_compact_and_user_scoped(db):

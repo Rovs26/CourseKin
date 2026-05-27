@@ -33,20 +33,25 @@ export function RightPanel({
   currentStage?: JobStage | null;
   hasReviewer?: boolean;
 }) {
+  const materialPolicy = {
+    "source-only": "Course materials only",
+    "source-web": "Materials plus cited web",
+    compare: "Compare materials",
+  }[project.source_mode];
   const settings = [
-    { label: "Age Level", value: project.age_bracket.replace("-", " ") },
-    { label: "Mode", value: project.learning_mode.replace("-", " ") },
-    { label: "Field", value: project.field_of_study },
-    { label: "Source Mode", value: project.source_mode.replace("-", " ") },
+    { label: "Course code", value: project.course_code ?? "Not set" },
+    { label: "Term", value: project.term ?? "Not set" },
+    { label: "Subject", value: project.field_of_study },
+    { label: "Material policy", value: materialPolicy },
   ];
 
   const primaryLabel = !canGenerate
-    ? "Add Sources First"
+    ? "Add Materials First"
     : isGenerating
     ? `${currentStage ? formatLabel(currentStage) : "processing"}...`
     : hasReviewer
-    ? "Regenerate Reviewer"
-    : "Generate Reviewer";
+    ? "Update Notebook"
+    : "Build Notebook";
 
   return (
     <div className="space-y-4">
@@ -54,7 +59,7 @@ export function RightPanel({
         <Card className="rounded-2xl border-slate-200 bg-slate-50 shadow-sm">
           <CardHeader>
             <CardTitle className="text-base text-slate-900">
-              Generation Status
+              Notebook status
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -62,7 +67,7 @@ export function RightPanel({
               {formatLabel(currentStage)}
             </p>
             <p className="mt-1 text-sm text-slate-500">
-              Your reviewer is being generated. This may take a moment.
+              Your notebook is being prepared. This may take a moment.
             </p>
           </CardContent>
         </Card>
@@ -70,7 +75,7 @@ export function RightPanel({
 
       <Card className="rounded-2xl shadow-sm">
         <CardHeader>
-          <CardTitle className="text-slate-900">Review Settings</CardTitle>
+          <CardTitle className="text-slate-900">Notebook settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {settings.map((setting) => (
@@ -101,7 +106,7 @@ export function RightPanel({
           onClick={onExportReviewer}
           disabled={!onExportReviewer || !hasReviewer || isGenerating}
         >
-          Export Reviewer
+          Export Notebook
         </Button>
       </div>
     </div>

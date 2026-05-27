@@ -11,9 +11,13 @@ from app.core.utils import utc_now_iso
 from app.db.database import get_db
 from app.db.models import (
     CourseObligation,
+    CourseStreamEntry,
+    CourseStreamEntrySource,
+    CourseTask,
     Job,
     PreparationMilestone,
     Project,
+    QuizAttempt,
     Reviewer,
     ReviewerFeedback,
     Source,
@@ -241,10 +245,16 @@ def delete_project(
                 path.unlink()
 
     # Cascade delete related records
+    db.query(CourseStreamEntrySource).filter(
+        CourseStreamEntrySource.project_id == project_id
+    ).delete()
+    db.query(CourseStreamEntry).filter(CourseStreamEntry.project_id == project_id).delete()
+    db.query(CourseTask).filter(CourseTask.project_id == project_id).delete()
     db.query(PreparationMilestone).filter(PreparationMilestone.project_id == project_id).delete()
     db.query(SourceChunk).filter(SourceChunk.project_id == project_id).delete()
     db.query(Source).filter(Source.project_id == project_id).delete()
     db.query(Job).filter(Job.project_id == project_id).delete()
+    db.query(QuizAttempt).filter(QuizAttempt.project_id == project_id).delete()
     db.query(ReviewerFeedback).filter(ReviewerFeedback.project_id == project_id).delete()
     db.query(CourseObligation).filter(CourseObligation.project_id == project_id).delete()
     reviewer = db.get(Reviewer, project_id)

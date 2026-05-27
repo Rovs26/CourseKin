@@ -15,22 +15,22 @@ export default function ProjectsPage() {
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-            Projects
+            Courses
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Manage your reviewer workspaces and continue where you left off.
+            Keep each class, its materials, its deadlines, and its study notebook together.
           </p>
         </div>
 
         <Button asChild className="rounded-xl">
-          <Link href={routes.newProject}>Create New Project</Link>
+          <Link href={routes.newCourse}>Add Course</Link>
         </Button>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-slate-500">Loading projects...</p>
+        <p className="text-sm text-slate-500">Loading courses...</p>
       ) : error ? (
-        <EmptyState title="Unable to load projects" description={error} />
+        <EmptyState title="Unable to load courses" description={error} />
       ) : summaries.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {summaries.map((summary) => (
@@ -39,8 +39,8 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <EmptyState
-          title="No projects yet"
-          description="Create a project to start your first reviewer workspace."
+          title="No courses yet"
+          description="Add a course, then upload a syllabus or class material to begin."
         />
       )}
     </div>

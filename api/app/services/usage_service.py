@@ -68,7 +68,7 @@ def estimated_generation_cost() -> float:
 
 def lock_quota_for_user(user_id: str, db: Session) -> None:
     """Serialize quota checks and reservations for one user in Postgres."""
-    if settings.is_postgres:
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
         db.execute(
             text("SELECT pg_advisory_xact_lock(hashtext(:user_id))"),
             {"user_id": user_id},

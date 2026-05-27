@@ -35,7 +35,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
 
 const VALID_TEMPLATES = new Set(Object.keys(TEMPLATE_LABELS));
 
-const steps = ["Course Basics", "Learning Setup", "Review Preferences"] as const;
+const steps = ["Course Details", "Study Approach", "Material Policy"] as const;
 
 export function ProjectWizard() {
   const router = useRouter();
@@ -49,9 +49,9 @@ export function ProjectWizard() {
 
   const [form, setForm] = useState({
     title: "",
-    project_type: "",
+    project_type: "school",
     field_of_study: "",
-    age_bracket: "",
+    age_bracket: "college",
     learning_mode: "",
     source_mode: "",
     course_code: "",
@@ -100,10 +100,10 @@ export function ProjectWizard() {
         meeting_schedule: form.meeting_schedule.trim() || null,
       });
 
-      router.push(routes.projectOverview(newProject.id));
+      router.push(routes.courseOverview(newProject.id));
     } catch (err) {
       setSubmitError(
-        err instanceof Error ? err.message : "Failed to create project."
+        err instanceof Error ? err.message : "Failed to create course."
       );
       setIsSubmitting(false);
     }
@@ -113,10 +113,10 @@ export function ProjectWizard() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-          Create Course Workspace
+          Add a course
         </h1>
         <p className="mt-2 text-sm text-slate-500">
-          Set up one course for sources, reviewer generation, and semester planning.
+          Keep your class materials, deadlines, questions, and study notebook in one place.
         </p>
       </div>
 
@@ -126,7 +126,7 @@ export function ProjectWizard() {
             Using template: <strong>{TEMPLATE_LABELS[templateId]}</strong>
           </span>
           <button
-            onClick={() => router.replace(routes.newProject)}
+            onClick={() => router.replace(routes.newCourse)}
             className="ml-auto text-xs font-medium text-slate-600 hover:text-slate-900"
           >
             Remove
@@ -161,29 +161,10 @@ export function ProjectWizard() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-slate-900">Workspace Type</Label>
-                <Select
-                  value={form.project_type}
-                  onValueChange={(value) => updateField("project_type", value)}
-                >
-                  <SelectTrigger className="text-slate-700">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="school">University Course</SelectItem>
-                    <SelectItem value="exam">Exam</SelectItem>
-                    <SelectItem value="teacher">Teacher</SelectItem>
-                    <SelectItem value="personal">Personal</SelectItem>
-                    <SelectItem value="research">Research</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-slate-900">Field of Study</Label>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-slate-900">Subject area</Label>
                 <Input
-                  placeholder="History"
+                  placeholder="Biology"
                   value={form.field_of_study}
                   onChange={(e) => updateField("field_of_study", e.target.value)}
                   className="text-slate-900 placeholder:text-slate-400"
@@ -230,27 +211,9 @@ export function ProjectWizard() {
           )}
 
           {step === 1 && (
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <Label className="text-slate-900">Age Bracket</Label>
-                <Select
-                  value={form.age_bracket}
-                  onValueChange={(value) => updateField("age_bracket", value)}
-                >
-                  <SelectTrigger className="text-slate-700">
-                    <SelectValue placeholder="Select age level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="grade-school">Grade School</SelectItem>
-                    <SelectItem value="high-school">High School</SelectItem>
-                    <SelectItem value="college">College</SelectItem>
-                    <SelectItem value="adult">Adult</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-slate-900">Learning Mode</Label>
+                <Label className="text-slate-900">How should the notebook explain material?</Label>
                 <Select
                   value={form.learning_mode}
                   onValueChange={(value) => updateField("learning_mode", value)}
@@ -259,19 +222,22 @@ export function ProjectWizard() {
                     <SelectValue placeholder="Select mode" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="beginner">Beginner</SelectItem>
-                    <SelectItem value="exam-cram">Exam Cram</SelectItem>
-                    <SelectItem value="deep">Deep Study</SelectItem>
+                    <SelectItem value="beginner">Clear and simple</SelectItem>
+                    <SelectItem value="exam-cram">Focused exam review</SelectItem>
+                    <SelectItem value="deep">Detailed study</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              <p className="rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                You can still ask for simpler explanations, worked examples, or deeper detail inside the course later.
+              </p>
             </div>
           )}
 
           {step === 2 && (
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
-                <Label className="text-slate-900">Source Mode</Label>
+                <Label className="text-slate-900">What may CourseKin use when answering?</Label>
                 <Select
                   value={form.source_mode}
                   onValueChange={(value) => updateField("source_mode", value)}
@@ -280,9 +246,9 @@ export function ProjectWizard() {
                     <SelectValue placeholder="Choose source mode" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="source-only">Source Only</SelectItem>
-                    <SelectItem value="source-web">Source + Web</SelectItem>
-                    <SelectItem value="compare">Compare</SelectItem>
+                    <SelectItem value="source-only">Only my course materials</SelectItem>
+                    <SelectItem value="source-web">Course materials plus cited web references</SelectItem>
+                    <SelectItem value="compare">Compare uploaded sources</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -291,11 +257,11 @@ export function ProjectWizard() {
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
                   <div>
-                    <p className="font-medium text-slate-900">Project setup preview</p>
+                    <p className="font-medium text-slate-900">Course setup preview</p>
                     <p className="mt-1 text-sm text-slate-500">
                       {templateId
                         ? `Template "${TEMPLATE_LABELS[templateId]}" will pre-configure your generation settings.`
-                        : "Your project will use default generation settings. You can customize sections and counts when generating."}
+                        : "Your course starts private. Add materials and choose when to build a notebook from them."}
                     </p>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -310,19 +276,19 @@ export function ProjectWizard() {
 
                       <div className="rounded-xl bg-white p-3">
                         <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Workspace Type
+                          Course Code
                         </p>
-                        <p className="mt-1 font-medium capitalize text-slate-900">
-                          {form.project_type || "Not set"}
+                        <p className="mt-1 font-medium text-slate-900">
+                          {form.course_code || "Not set"}
                         </p>
                       </div>
 
                       <div className="rounded-xl bg-white p-3">
                         <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Age Bracket
+                          Instructor
                         </p>
-                        <p className="mt-1 font-medium capitalize text-slate-900">
-                          {form.age_bracket ? form.age_bracket.replace("-", " ") : "Not set"}
+                        <p className="mt-1 font-medium text-slate-900">
+                          {form.instructor || "Not set"}
                         </p>
                       </div>
                       {form.project_type === "school" && form.term && (
@@ -336,7 +302,7 @@ export function ProjectWizard() {
 
                       <div className="rounded-xl bg-white p-3">
                         <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Learning Mode
+                          Study Approach
                         </p>
                         <p className="mt-1 font-medium capitalize text-slate-900">
                           {form.learning_mode
@@ -347,7 +313,7 @@ export function ProjectWizard() {
 
                       <div className="rounded-xl bg-white p-3">
                         <p className="text-xs uppercase tracking-wide text-slate-400">
-                          Field of Study
+                          Subject Area
                         </p>
                         <p className="mt-1 font-medium text-slate-900">
                           {form.field_of_study || "Not set"}
@@ -356,7 +322,7 @@ export function ProjectWizard() {
 
                       <div className="rounded-xl bg-white p-3">
                         <p className="text-xs uppercase tracking-wide text-slate-400">
-                          {templateId ? "Template" : "Source Mode"}
+                          {templateId ? "Template" : "Material Policy"}
                         </p>
                         <p className="mt-1 font-medium capitalize text-slate-900">
                           {templateId
@@ -405,7 +371,7 @@ export function ProjectWizard() {
               </Button>
             ) : (
               <Button onClick={handleCreateProject} disabled={!canSubmit || isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Project"}
+                {isSubmitting ? "Creating..." : "Add Course"}
               </Button>
             )}
           </div>

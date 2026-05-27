@@ -21,14 +21,16 @@ export function SourceUploadPanel({
   onAddPdf,
   onAddUrl,
   onAddText,
+  defaultPurpose = "study_material",
 }: {
   onAddPdf?: (file: File, purpose: SourcePurpose) => void;
   onAddUrl?: (url: string, purpose: SourcePurpose) => void;
   onAddText?: (text: string, purpose: SourcePurpose) => void;
+  defaultPurpose?: SourcePurpose;
 }) {
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
-  const [purpose, setPurpose] = useState<SourcePurpose>("study_material");
+  const [purpose, setPurpose] = useState<SourcePurpose>(defaultPurpose);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const submitUrl = () => {
@@ -67,7 +69,7 @@ export function SourceUploadPanel({
   return (
     <Card className="rounded-2xl shadow-sm">
       <CardHeader>
-        <CardTitle className="text-slate-900 dark:text-slate-100">Add Source</CardTitle>
+        <CardTitle className="text-slate-900 dark:text-slate-100">Add material</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="mb-5 space-y-2">
@@ -85,7 +87,7 @@ export function SourceUploadPanel({
           </Select>
           {purpose === "syllabus" && (
             <p className="text-xs text-[var(--ck-primary)]">
-              CourseKin can propose deadlines from this syllabus in the Planning tab.
+              Once processed, your syllabus can be used to propose dates in Plan.
             </p>
           )}
         </div>
@@ -106,9 +108,11 @@ export function SourceUploadPanel({
                 onChange={handleFileChange}
               />
               <FileUp className="mx-auto h-8 w-8 text-slate-400" />
-              <p className="mt-3 font-medium text-slate-900">Upload PDF</p>
+              <p className="mt-3 font-medium text-slate-900">
+                {purpose === "syllabus" ? "Upload syllabus PDF" : "Upload PDF"}
+              </p>
               <p className="mt-1 text-sm text-slate-500">
-                Drag and drop or browse to add lecture notes, handouts, or readings.
+                Choose a PDF for secure processing and text extraction.
               </p>
               <Button
                 className="mt-4"
@@ -130,7 +134,7 @@ export function SourceUploadPanel({
               />
             </div>
             <Button onClick={submitUrl} disabled={!url.trim()}>
-              Add URL Source
+              Add URL
             </Button>
           </TabsContent>
 
@@ -145,7 +149,7 @@ export function SourceUploadPanel({
               />
             </div>
             <Button onClick={submitText} disabled={!text.trim()}>
-              Add Text Source
+              Add Text
             </Button>
           </TabsContent>
         </Tabs>

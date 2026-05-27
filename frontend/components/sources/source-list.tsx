@@ -98,7 +98,7 @@ export function SourceList({
                   className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
                 >
                   <Sparkles className="h-3 w-3" />
-                  Generate
+                  Use in Notebook
                 </button>
               )}
             </div>

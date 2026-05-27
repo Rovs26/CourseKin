@@ -1,4 +1,8 @@
 export const routes = {
+  today: "/dashboard",
+  courses: "/projects",
+  calendar: "/calendar",
+  newCourse: "/projects/new",
   dashboard: "/dashboard",
   projects: "/projects",
   newProject: "/projects/new",
@@ -9,7 +13,14 @@ export const routes = {
   projectOverview: (projectId: string) => `/projects/${projectId}`,
   projectReviewer: (projectId: string) => `/projects/${projectId}/reviewer`,
   projectSources: (projectId: string) => `/projects/${projectId}/sources`,
+  projectStream: (projectId: string) => `/projects/${projectId}/stream`,
   projectPlanning: (projectId: string) => `/projects/${projectId}/planning`,
   projectSettings: (projectId: string) => `/projects/${projectId}/settings`,
   projectExport: (projectId: string) => `/projects/${projectId}/reviewer/export`,
+  courseOverview: (courseId: string) => `/projects/${courseId}`,
+  courseNotebook: (courseId: string) => `/projects/${courseId}/reviewer`,
+  courseMaterials: (courseId: string) => `/projects/${courseId}/sources`,
+  courseRoom: (courseId: string) => `/projects/${courseId}/stream`,
+  coursePlan: (courseId: string) => `/projects/${courseId}/planning`,
+  courseSettings: (courseId: string) => `/projects/${courseId}/settings`,
 };

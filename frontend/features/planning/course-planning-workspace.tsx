@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CalendarPlus, CheckCircle2, FileSearch, ShieldCheck } from "lucide-react";
+import { ArrowRight, CalendarPlus, CheckCircle2, Circle, FileSearch, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ import { PreparationRunway } from "@/features/planning/preparation-runway";
 import { useProject } from "@/hooks/use-project";
 import { useSources } from "@/hooks/use-sources";
 import { useObligations } from "@/hooks/use-obligations";
+import { routes } from "@/lib/routes";
 import {
   downloadConfirmedCalendar,
   extractSyllabusObligations,
@@ -38,6 +40,54 @@ const OBLIGATION_LABELS: Record<ObligationType, string> = {
   reading: "Reading",
   other: "Other",
 };
+
+type PlanStepStatus = "complete" | "active" | "waiting";
+
+function PlanStep({
+  number,
+  title,
+  description,
+  status,
+  action,
+}: {
+  number: string;
+  title: string;
+  description: string;
+  status: PlanStepStatus;
+  action?: { href: string; label: string };
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border bg-white p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Step {number}
+        </span>
+        {status === "complete" ? (
+          <CheckCircle2 className="h-5 w-5 text-[var(--ck-primary)]" />
+        ) : (
+          <Circle
+            className={`h-5 w-5 ${
+              status === "active" ? "fill-[var(--ck-primary-soft)] text-[var(--ck-primary)]" : "text-slate-300"
+            }`}
+          />
+        )}
+      </div>
+      <div>
+        <p className="font-medium text-slate-900">{title}</p>
+        <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
+      </div>
+      {action && (
+        <Link
+          href={action.href}
+          className="mt-auto inline-flex items-center gap-1 text-sm font-medium text-[var(--ck-primary)]"
+        >
+          {action.label}
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      )}
+    </div>
+  );
+}
 
 function ObligationEditor({
   item,
@@ -158,6 +208,11 @@ export function CoursePlanningWorkspace({ projectId }: { projectId: string }) {
   const syllabusSources = sources.filter(
     (source) => source.purpose === "syllabus" && source.status === "processed"
   );
+  const syllabusIsProcessing = sources.some(
+    (source) =>
+      source.purpose === "syllabus" &&
+      (source.status === "uploaded" || source.status === "processing")
+  );
   const [sourceId, setSourceId] = useState("");
   const [turnstileToken, setTurnstileToken] = useState<string | undefined>();
   const [jobId, setJobId] = useState<string | null>(null);
@@ -242,12 +297,85 @@ export function CoursePlanningWorkspace({ projectId }: { projectId: string }) {
   }
 
   const visibleItems = obligations.filter((item) => item.status !== "dismissed");
+  const proposedItems = visibleItems.filter((item) => item.status === "proposed");
+  const confirmedItems = visibleItems.filter((item) => item.status === "confirmed");
   const confirmedWithDates = obligations.filter(
     (item) => item.status === "confirmed" && item.due_date
   ).length;
+  const hasReadySyllabus = syllabusSources.length > 0;
+  const hasReviewedProposal =
+    confirmedItems.length > 0 && proposedItems.length === 0;
 
   return (
     <div className="space-y-6">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ck-primary)]">
+          Plan
+        </p>
+        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">
+          Turn the syllabus into dates you can act on.
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+          CourseKin suggests tasks and assessments from your syllabus. You decide what is correct
+          before anything becomes part of your preparation schedule or calendar export.
+        </p>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        <PlanStep
+          number="01"
+          title="Add a syllabus"
+          description={
+            hasReadySyllabus
+              ? `${syllabusSources.length} processed syllabus material${syllabusSources.length === 1 ? "" : "s"} available.`
+              : syllabusIsProcessing
+                ? "A syllabus is being processed. Plan can extract dates after it is ready."
+              : "Upload or paste a syllabus in Materials before extracting dates."
+          }
+          status={hasReadySyllabus ? "complete" : "active"}
+          action={
+            hasReadySyllabus || syllabusIsProcessing
+              ? undefined
+              : {
+                  href: `${routes.courseMaterials(projectId)}?add=syllabus`,
+                  label: "Add syllabus",
+                }
+          }
+        />
+        <PlanStep
+          number="02"
+          title="Review proposed dates"
+          description={
+            hasReviewedProposal
+              ? `${confirmedItems.length} confirmed item${confirmedItems.length === 1 ? "" : "s"} saved.`
+              : proposedItems.length > 0
+                ? `${proposedItems.length} proposed item${proposedItems.length === 1 ? "" : "s"} need your review.`
+                : "Extract tasks from a processed syllabus, then check each date."
+          }
+          status={hasReviewedProposal ? "complete" : hasReadySyllabus ? "active" : "waiting"}
+          action={
+            hasReadySyllabus && !hasReviewedProposal
+              ? { href: "#review-dates", label: proposedItems.length ? "Review dates" : "Extract dates" }
+              : undefined
+          }
+        />
+        <PlanStep
+          number="03"
+          title="Build preparation"
+          description={
+            confirmedWithDates > 0
+              ? `${confirmedWithDates} confirmed deadline${confirmedWithDates === 1 ? "" : "s"} ready for a balanced plan.`
+              : "Confirm at least one dated item to plan study sessions."
+          }
+          status={confirmedWithDates > 0 ? "active" : "waiting"}
+          action={
+            confirmedWithDates > 0
+              ? { href: "#preparation-runway", label: "Build plan" }
+              : undefined
+          }
+        />
+      </div>
+
       <Card className="rounded-2xl border-[var(--ck-primary-border)] bg-[var(--ck-primary-soft)] shadow-sm">
         <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -260,13 +388,13 @@ export function CoursePlanningWorkspace({ projectId }: { projectId: string }) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div id="review-dates" className="grid scroll-mt-20 gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         <Card className="h-fit rounded-2xl shadow-sm">
-          <CardHeader><CardTitle className="text-lg">Syllabus Intake</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-lg">Extract from syllabus</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {syllabusSources.length === 0 ? (
               <p className="text-sm text-slate-600">
-                Add a PDF, URL, or pasted text as <strong>Course syllabus</strong> in Sources first.
+                Add a PDF, URL, or pasted text as <strong>Course syllabus</strong> in Materials first.
               </p>
             ) : (
               <>
@@ -305,7 +433,7 @@ export function CoursePlanningWorkspace({ projectId }: { projectId: string }) {
         </Card>
 
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-slate-900">Obligations and Assessments</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Review dates and requirements</h2>
           {visibleItems.length === 0 ? (
             <EmptyState
               title="No proposed obligations yet"
@@ -319,7 +447,9 @@ export function CoursePlanningWorkspace({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <PreparationRunway projectId={projectId} refreshToken={runwayRefreshToken} />
+      <div id="preparation-runway" className="scroll-mt-20">
+        <PreparationRunway projectId={projectId} refreshToken={runwayRefreshToken} />
+      </div>
     </div>
   );
 }

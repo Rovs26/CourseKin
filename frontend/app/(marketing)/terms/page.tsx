@@ -65,6 +65,20 @@ export default function TermsPage() {
               In-app reminders are convenience prompts based on your saved plan and settings.
               You remain responsible for tracking official course deadlines and submissions.
             </p>
+            <p className="mt-3">
+              The private course stream stores notes, questions, reflections, and references to
+              course materials that you add to a course timeline. Saving an entry does not
+              generate an AI answer. When you request an answer for a question, CourseKin attempts
+              to answer only from the course materials you attached and displays the cited
+              evidence; it does not automatically search the web.
+            </p>
+            <p className="mt-3">
+              Coursework coaching supports preparation for light assignments, short papers, and
+              office hours by providing evidence-linked checklists and feedback from selected
+              course materials and confirmed rubric context. It does not provide finished
+              submissions, presentations or slide decks, thesis-level writing, complex data-heavy
+              papers, or group-paper authorship.
+            </p>
           </section>
 
           <section>
@@ -83,6 +97,10 @@ export default function TermsPage() {
               <li>
                 Generated reviewer content is derived from your source material and is provided for
                 your personal educational use.
+              </li>
+              <li>
+                You can edit or delete your private course-stream entries, and they are included
+                when you export or delete your account data.
               </li>
             </ul>
           </section>

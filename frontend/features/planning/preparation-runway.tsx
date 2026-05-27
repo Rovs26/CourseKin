@@ -275,10 +275,10 @@ export function PreparationRunway({ projectId, refreshToken }: { projectId: stri
             <div>
               <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
                 <CalendarClock className="h-5 w-5 text-[var(--ck-primary)]" />
-                Preparation Runway
+                Preparation schedule
               </h2>
               <p className="mt-1 text-sm text-slate-600">
-                CourseKin spreads focused preparation steps before confirmed deadlines. These are suggestions, not calendar events.
+                CourseKin spreads small preparation steps before confirmed deadlines. These remain suggestions until you follow them.
               </p>
             </div>
             <div className="flex flex-wrap items-end gap-2">
@@ -296,7 +296,7 @@ export function PreparationRunway({ projectId, refreshToken }: { projectId: stri
               </div>
               <Button onClick={buildPlan} disabled={!hasConfirmed || building}>
                 <Sparkles className="mr-2 h-4 w-4" />
-                {building ? "Balancing..." : runway.total_sessions ? "Rebalance Plan" : "Build Plan"}
+                {building ? "Balancing..." : runway.total_sessions ? "Rebalance Schedule" : "Build Schedule"}
               </Button>
             </div>
           </div>
@@ -318,7 +318,7 @@ export function PreparationRunway({ projectId, refreshToken }: { projectId: stri
             </div>
           ) : (
             <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-              Confirm at least one dated syllabus obligation above to build a preparation runway.
+              Confirm at least one dated syllabus item above to build a preparation schedule.
             </p>
           )}
           {heavyDays.length > 0 && (

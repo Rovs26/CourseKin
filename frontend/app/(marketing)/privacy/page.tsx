@@ -37,7 +37,17 @@ export default function PrivacyPage() {
                 <strong>Course planning information:</strong> Optional course code, academic term,
                 instructor, class schedule, syllabus-derived assessment proposals, your corrections,
                 deadlines you confirm for calendar export, preparation-session status, and
-                in-app reminder preferences.
+                in-app reminder preferences. This also includes course tasks you create, their
+                dates, priorities, completion state, and notes. We retain the original proposal and
+                your first review decision so we can measure extraction correction rates.
+              </li>
+              <li>
+                <strong>Private course stream information:</strong> Notes, questions, and
+                reflections you save in a course timeline, including edits, timestamps, and
+                references you attach to materials already stored in that course workspace. If you
+                request an answer for a question, we also store its status, cited answer, and
+                evidence excerpts. If you request coursework coaching, we store your prompt,
+                selected confirmed-task context, generated guidance, and cited evidence excerpts.
               </li>
               <li>
                 <strong>Technical data:</strong> IP address, browser user agent, timestamps of
@@ -60,6 +70,9 @@ export default function PrivacyPage() {
               <li>To create calendar files only from deadlines you explicitly confirm.</li>
               <li>To suggest balanced preparation sessions from confirmed deadlines; these suggested sessions are not silently synchronized to an external calendar.</li>
               <li>To show in-app dashboard prompts for planned sessions when you enable course reminders.</li>
+              <li>To display and manage course tasks you create in your private Calendar and Tasks workspace.</li>
+              <li>To measure syllabus correction rates and whether planned sessions are completed before confirmed assessment dates.</li>
+              <li>To store and display your private course-stream notes, questions, reflections, linked course materials, requested citation-grounded answers, and requested bounded coursework guidance within the selected course workspace.</li>
               <li>To enforce usage quotas, rate limits, and abuse prevention.</li>
               <li>To improve service reliability through error monitoring and structured logging.</li>
               <li>To send transactional emails (e.g., account-related notifications) via Resend.</li>
@@ -67,6 +80,11 @@ export default function PrivacyPage() {
             <p className="mt-3">
               We do not sell your data. We do not use your content to train AI models.
               We do not use advertising cookies or share data with ad networks.
+              Saving an entry or linking existing course material in the private course stream
+              does not by itself submit it to an AI model. When you choose to request an answer
+              or coursework guidance, your request, selected confirmed-task context where
+              applicable, and attached course-material excerpts are processed by OpenAI to
+              produce citation-grounded output.
             </p>
           </section>
 
@@ -84,6 +102,11 @@ export default function PrivacyPage() {
               </li>
               <li>
                 CourseKin does <strong>not</strong> use your content to train our own models.
+              </li>
+              <li>
+                CourseKin coursework coaching is limited to study guidance, checklists, short-draft
+                feedback, and office-hours preparation. It is not intended to produce finished
+                submissions.
               </li>
               <li>
                 <strong>Generated output may contain errors.</strong> CourseKin is a study aid,
@@ -125,8 +148,8 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold text-slate-900">5. Data Retention</h2>
             <ul className="mt-3 list-disc space-y-1 pl-5">
               <li>
-                Your course workspaces, sources, planning records, and generated content are
-                retained as long as your account is active.
+                Your course workspaces, sources, planning records, course tasks, private stream
+                entries, and generated content are retained as long as your account is active.
               </li>
               <li>
                 After account deletion, your personal data is wiped from our systems within{" "}

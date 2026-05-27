@@ -32,10 +32,10 @@ export function UpcomingPreparation() {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg text-slate-900">
           <BellRing className="h-5 w-5 text-[var(--ck-primary)]" />
-          Upcoming Preparation
+          Next up
         </CardTitle>
         <p className="text-sm text-slate-500">
-          In-app prompts from the preparation sessions you planned.
+          Planned study sessions from your confirmed course dates.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -45,7 +45,7 @@ export function UpcomingPreparation() {
           <p className="text-sm text-rose-600">{error}</p>
         ) : reminders.length === 0 ? (
           <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-            Nothing is due soon. Build a preparation runway inside a course plan to see prompts here.
+            Nothing planned yet. Confirm syllabus dates in a course plan to build your schedule.
           </p>
         ) : (
           <>

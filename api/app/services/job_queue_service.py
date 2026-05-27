@@ -4,7 +4,9 @@ from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 from app.core.utils import utc_now_iso
 from app.db.database import SessionLocal
-from app.db.models import Job, Source
+from app.db.models import CourseStreamEntry, Job, Source
+from app.services.course_answer_service import run_course_answer_in_background
+from app.services.course_coaching_service import run_course_coaching_in_background
 from app.services.generation_service import run_generation_in_background
 from app.services.planning_service import run_syllabus_extraction_in_background
 from app.services.source_chunk_service import ensure_source_chunks, serialize_chunks
@@ -62,8 +64,8 @@ def process_next_queued_job() -> bool:
         job.stage = "generating"
         job.attempts += 1
         job.updated_at = utc_now_iso()
-        source = db.get(Source, job.source_id)
         options = job.generation_options or {}
+        source = db.get(Source, job.source_id)
         db.commit()
 
         if not source or not (source.text or "").strip():
@@ -71,6 +73,15 @@ def process_next_queued_job() -> bool:
             job.stage = "failed"
             job.error_message = "Source text is unavailable"
             job.updated_at = utc_now_iso()
+            if job.job_type in {"answer-course-question", "coach-coursework"}:
+                item = db.get(CourseStreamEntry, options.get("stream_entry_id", ""))
+                if item:
+                    if job.job_type == "answer-course-question" and item.answer_job_id == job.id:
+                        item.answer_status = "failed"
+                        item.updated_at = job.updated_at
+                    if job.job_type == "coach-coursework" and item.coaching_job_id == job.id:
+                        item.coaching_status = "failed"
+                        item.updated_at = job.updated_at
             if job.user_id:
                 release_reserved_cost(db, job.user_id, job.id)
             db.commit()
@@ -84,6 +95,36 @@ def process_next_queued_job() -> bool:
         source_text = source.text or ""
         source_title = source.title
         source_chunks = serialize_chunks(ensure_source_chunks(db, source))
+        if job_type in {"answer-course-question", "coach-coursework"}:
+            source_ids = options.get("source_ids") or [source.id]
+            answer_sources = {
+                item.id: item
+                for item in db.query(Source)
+                .filter(Source.project_id == project_id, Source.id.in_(source_ids))
+                .all()
+            }
+            if set(answer_sources) != set(source_ids):
+                job.status = "failed"
+                job.stage = "failed"
+                job.error_message = "Linked course material is unavailable"
+                job.updated_at = utc_now_iso()
+                item = db.get(CourseStreamEntry, options.get("stream_entry_id", ""))
+                if item:
+                    if job_type == "answer-course-question" and item.answer_job_id == job.id:
+                        item.answer_status = "failed"
+                        item.updated_at = job.updated_at
+                    if job_type == "coach-coursework" and item.coaching_job_id == job.id:
+                        item.coaching_status = "failed"
+                        item.updated_at = job.updated_at
+                if job.user_id:
+                    release_reserved_cost(db, job.user_id, job.id)
+                db.commit()
+                return True
+            source_chunks = []
+            for selected_source_id in source_ids:
+                selected_source = answer_sources[selected_source_id]
+                for chunk in serialize_chunks(ensure_source_chunks(db, selected_source)):
+                    source_chunks.append({**chunk, "source_title": selected_source.title})
         db.commit()
     finally:
         db.close()
@@ -94,6 +135,27 @@ def process_next_queued_job() -> bool:
             project_id=project_id,
             source_id=source_id,
             source_text=source_text,
+            user_id=user_id,
+        )
+        return True
+
+    if job_type == "answer-course-question":
+        run_course_answer_in_background(
+            job_id=job_id,
+            project_id=project_id,
+            entry_id=options.get("stream_entry_id", ""),
+            source_chunks=source_chunks,
+            explanation_mode=options.get("explanation_mode", "standard"),
+            user_id=user_id,
+        )
+        return True
+
+    if job_type == "coach-coursework":
+        run_course_coaching_in_background(
+            job_id=job_id,
+            project_id=project_id,
+            entry_id=options.get("stream_entry_id", ""),
+            source_chunks=source_chunks,
             user_id=user_id,
         )
         return True

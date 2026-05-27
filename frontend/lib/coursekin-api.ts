@@ -1,5 +1,10 @@
 import type { Project } from "@/types/project";
-import type { ReviewerFeedbackRating, ReviewerOutput, ReviewerStatus } from "@/types/reviewer";
+import type {
+  ReviewerEvidenceItem,
+  ReviewerFeedbackRating,
+  ReviewerOutput,
+  ReviewerStatus,
+} from "@/types/reviewer";
 import type { Source, SourcePurpose } from "@/types/source";
 
 export const API_BASE_URL = (
@@ -222,6 +227,179 @@ export type PreparationReminder = {
   days_until: number;
 };
 
+export type CourseTaskPriority = "low" | "medium" | "high";
+export type CourseTaskStatus = "open" | "completed";
+
+export type CourseTask = {
+  id: string;
+  project_id: string;
+  project_title: string;
+  course_code: string | null;
+  title: string;
+  notes: string | null;
+  due_date: string | null;
+  priority: CourseTaskPriority;
+  status: CourseTaskStatus;
+  origin: "student";
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CalendarAgendaItem = {
+  id: string;
+  item_type: "deadline" | "preparation_session" | "task";
+  project_id: string;
+  project_title: string;
+  course_code: string | null;
+  title: string;
+  date: string;
+  status: string;
+  details: string | null;
+  priority: CourseTaskPriority | null;
+  estimated_minutes: number | null;
+  obligation_id: string | null;
+};
+
+export type CalendarAgenda = {
+  items: CalendarAgendaItem[];
+  unscheduled_tasks: CourseTask[];
+  start_date: string;
+  end_date: string;
+  reference_date: string;
+  open_tasks: number;
+  overdue_tasks: number;
+  upcoming_deadlines: number;
+};
+
+export type CourseStreamCaptureType = "note" | "question" | "reflection";
+export type CourseStreamEntryType = CourseStreamCaptureType | "coaching";
+export type ConfusionStatus = "open" | "resolved";
+export type CourseAnswerMode = "standard" | "simplified" | "step_by_step" | "example_first";
+export type CourseAnswerStatus =
+  | "queued"
+  | "generating"
+  | "answered"
+  | "insufficient_evidence"
+  | "failed";
+export type CoachingMode = "assignment_plan" | "draft_feedback" | "office_hours";
+export type CoachingStatus =
+  | "queued"
+  | "generating"
+  | "ready"
+  | "insufficient_evidence"
+  | "failed";
+
+export type QuizAttemptResult = {
+  item_index: number;
+  topic: string | null;
+  question: string;
+  selected_answer: string;
+  correct_answer: string;
+  rationale: string;
+  is_correct: boolean;
+  evidence: ReviewerEvidenceItem | null;
+};
+
+export type QuizAttempt = {
+  id: string;
+  project_id: string;
+  reviewer_version: number;
+  results: QuizAttemptResult[];
+  total_questions: number;
+  correct_answers: number;
+  score_percent: number;
+  duration_seconds: number | null;
+  created_at: string;
+};
+
+export type QuizFocusTopic = {
+  topic: string;
+  questions_answered: number;
+  correct_answers: number;
+  score_percent: number;
+  missed_count: number;
+  status: "needs_review" | "practicing" | "recall_improving";
+  recommended_action: string;
+};
+
+export type QuizPracticeSummary = {
+  total_attempts: number;
+  total_answered: number;
+  total_correct: number;
+  latest_score_percent: number | null;
+  best_score_percent: number | null;
+  practice_signal: "no_practice" | "early" | "needs_review" | "building";
+  practice_signal_label: string;
+  signal_note: string;
+  next_action: string;
+  focus_topics: QuizFocusTopic[];
+  focus_questions: QuizAttemptResult[];
+  recent_attempts: QuizAttempt[];
+};
+
+type CourseEvidence = {
+  status: "supported" | "not_found";
+  source_scope: "course_materials_only";
+  citations: Array<{
+    chunk_id: string;
+    source_id: string;
+    source_title: string;
+    page_number?: number | null;
+    excerpt: string;
+  }>;
+};
+
+export type CourseStreamEntry = {
+  id: string;
+  project_id: string;
+  entry_type: CourseStreamEntryType;
+  content: string;
+  linked_sources: Array<Pick<Source, "id" | "title" | "type" | "status" | "purpose">>;
+  confusion_status: ConfusionStatus | null;
+  answer_status: CourseAnswerStatus | null;
+  answer_mode: CourseAnswerMode | null;
+  answer_content: string | null;
+  answer_evidence: CourseEvidence | null;
+  answer_job_id: string | null;
+  answer_generated_at: string | null;
+  coaching_mode: CoachingMode | null;
+  related_obligation_id: string | null;
+  coaching_context: {
+    obligation: Pick<
+      CourseObligation,
+      "id" | "title" | "obligation_type" | "due_date" | "details" | "grading_criteria"
+    > | null;
+  } | null;
+  coaching_status: CoachingStatus | null;
+  coaching_output: {
+    guidance: string;
+    next_steps: string[];
+    rubric_checks: string[];
+    questions_for_instructor: string[];
+    limitation_note: string;
+  } | null;
+  coaching_evidence: CourseEvidence | null;
+  coaching_job_id: string | null;
+  coaching_generated_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type CourseStreamEntryInput = {
+  entry_type: CourseStreamCaptureType;
+  content: string;
+  linked_source_ids: string[];
+};
+
+type CourseCoachingInput = {
+  coaching_mode: CoachingMode;
+  content: string;
+  obligation_id?: string;
+  linked_source_ids: string[];
+  turnstile_token?: string;
+};
+
 function localCalendarDate() {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -387,7 +565,12 @@ export async function presignAndUploadPDF(
         reject(new Error(`Upload to storage failed (${xhr.status})`));
       }
     };
-    xhr.onerror = () => reject(new Error("Upload to storage failed (network error)"));
+    xhr.onerror = () =>
+      reject(
+        new Error(
+          "PDF could not reach secure file storage. Try pasting its text for now or contact support."
+        )
+      );
     xhr.send(file);
   });
 
@@ -509,6 +692,128 @@ export function listPreparationReminders() {
   );
 }
 
+export function listCourseTasks(includeCompleted = true) {
+  return apiRequest<{ items: CourseTask[]; total: number }>(
+    `/planning/tasks?include_completed=${includeCompleted}`,
+    { method: "GET" }
+  );
+}
+
+export function createCourseTask(
+  projectId: string,
+  input: {
+    title: string;
+    notes?: string;
+    due_date?: string;
+    priority: CourseTaskPriority;
+  }
+) {
+  return apiRequest<CourseTask>(`/projects/${projectId}/planning/tasks`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCourseTask(
+  projectId: string,
+  taskId: string,
+  input: Partial<{
+    title: string;
+    notes: string | null;
+    due_date: string | null;
+    priority: CourseTaskPriority;
+    status: CourseTaskStatus;
+  }>
+) {
+  return apiRequest<CourseTask>(`/projects/${projectId}/planning/tasks/${taskId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteCourseTask(projectId: string, taskId: string) {
+  return apiRequest<void>(`/projects/${projectId}/planning/tasks/${taskId}`, {
+    method: "DELETE",
+  });
+}
+
+export function getCalendarAgenda(startDate: string, endDate: string) {
+  return apiRequest<CalendarAgenda>(
+    `/planning/calendar?start_date=${startDate}&end_date=${endDate}&reference_date=${localCalendarDate()}`,
+    { method: "GET" }
+  );
+}
+
+export function listCourseStreamEntries(projectId: string) {
+  return apiRequest<ListResponse<CourseStreamEntry>>(
+    `/projects/${projectId}/stream/entries?limit=100`,
+    { method: "GET" }
+  );
+}
+
+export function createCourseStreamEntry(
+  projectId: string,
+  input: CourseStreamEntryInput
+) {
+  return apiRequest<CourseStreamEntry>(`/projects/${projectId}/stream/entries`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCourseStreamEntry(
+  projectId: string,
+  entryId: string,
+  input: CourseStreamEntryInput
+) {
+  return apiRequest<CourseStreamEntry>(`/projects/${projectId}/stream/entries/${entryId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteCourseStreamEntry(projectId: string, entryId: string) {
+  return apiRequest<{ message: string }>(`/projects/${projectId}/stream/entries/${entryId}`, {
+    method: "DELETE",
+  });
+}
+
+export function updateCourseConfusionStatus(
+  projectId: string,
+  entryId: string,
+  status: ConfusionStatus
+) {
+  return apiRequest<CourseStreamEntry>(
+    `/projects/${projectId}/stream/entries/${entryId}/confusion`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }
+  );
+}
+
+export function requestCourseAnswer(
+  projectId: string,
+  entryId: string,
+  explanationMode: CourseAnswerMode,
+  turnstileToken?: string
+) {
+  return apiRequest<Job>(`/projects/${projectId}/stream/entries/${entryId}/answer`, {
+    method: "POST",
+    body: JSON.stringify({
+      explanation_mode: explanationMode,
+      turnstile_token: turnstileToken,
+    }),
+  });
+}
+
+export function requestCourseworkCoaching(projectId: string, input: CourseCoachingInput) {
+  return apiRequest<CourseStreamEntry>(`/projects/${projectId}/stream/coaching`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function downloadConfirmedCalendar(projectId: string): Promise<Blob> {
   const headers = new Headers();
   if (_getToken) {
@@ -561,6 +866,26 @@ export function submitReviewerFeedback(
   }>(`/projects/${projectId}/reviewer/feedback`, {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+export function submitQuizAttempt(
+  projectId: string,
+  input: {
+    reviewer_version: number;
+    answers: Array<{ item_index: number; selected_answer: string }>;
+    duration_seconds?: number;
+  }
+) {
+  return apiRequest<QuizAttempt>(`/projects/${projectId}/reviewer/quiz-attempts`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getQuizPracticeSummary(projectId: string) {
+  return apiRequest<QuizPracticeSummary>(`/projects/${projectId}/reviewer/practice-summary`, {
+    method: "GET",
   });
 }
 
@@ -618,8 +943,33 @@ export interface CacheStats {
   hit_rate: number;
 }
 
+export interface CoursePlanningValidation {
+  extraction_review: {
+    measurable_reviews: number;
+    confirmed: number;
+    dismissed: number;
+    unchanged_confirmations: number;
+    corrected_confirmations: number;
+    unchanged_confirmation_rate: number;
+    field_corrections: Record<string, number>;
+  };
+  preparation_return: {
+    confirmed_dated_assessments: number;
+    assessments_with_runway: number;
+    assessments_with_early_completed_session: number;
+    early_preparation_rate: number;
+  };
+  notes: string[];
+}
+
 export function getAbuseSummary() {
   return apiRequest<AbuseSummary>("/admin/abuse/summary", { method: "GET" });
+}
+
+export function getCoursePlanningValidation() {
+  return apiRequest<CoursePlanningValidation>("/admin/course-planning/validation", {
+    method: "GET",
+  });
 }
 
 export function getCacheStats() {

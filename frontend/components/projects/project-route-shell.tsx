@@ -22,7 +22,7 @@ export function ProjectRouteShell({
   if (isLoading) {
     return (
       <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <p className="text-sm text-slate-500">Loading project...</p>
+        <p className="text-sm text-slate-500">Loading course...</p>
       </div>
     );
   }
@@ -30,7 +30,7 @@ export function ProjectRouteShell({
   if (error) {
     return (
       <EmptyState
-        title="Unable to load project"
+        title="Unable to load course"
         description={error}
       />
     );
@@ -39,8 +39,8 @@ export function ProjectRouteShell({
   if (!project) {
     return (
       <EmptyState
-        title="Project not found"
-        description="This project does not exist in the current workspace."
+        title="Course not found"
+        description="This course does not exist in your workspace."
       />
     );
   }

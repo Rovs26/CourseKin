@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { useProject } from "@/hooks/use-project";
 import { useReviewer } from "@/hooks/use-reviewer";
 import { useSources } from "@/hooks/use-sources";
+import { routes } from "@/lib/routes";
 
 export default function ProjectOverviewPage() {
   const params = useParams<{ projectId: string }>();
@@ -28,7 +29,7 @@ export default function ProjectOverviewPage() {
   if (isLoading) {
     return (
       <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <p className="text-sm text-slate-500">Loading project overview...</p>
+        <p className="text-sm text-slate-500">Loading course overview...</p>
       </div>
     );
   }
@@ -36,7 +37,7 @@ export default function ProjectOverviewPage() {
   if (error) {
     return (
       <EmptyState
-        title="Unable to load project overview"
+        title="Unable to load course overview"
         description={error}
       />
     );
@@ -45,8 +46,8 @@ export default function ProjectOverviewPage() {
   if (!project || !reviewer) {
     return (
       <EmptyState
-        title="Project not found"
-        description="This project does not exist in the current workspace."
+        title="Course not found"
+        description="This course does not exist in your workspace."
       />
     );
   }
@@ -99,59 +100,35 @@ export default function ProjectOverviewPage() {
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Type</p>
-            <p className="mt-1 font-semibold capitalize text-slate-900">
-              {project.project_type}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Age Bracket</p>
-            <p className="mt-1 font-semibold capitalize text-slate-900">
-              {project.age_bracket.replace("-", " ")}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Learning Mode</p>
-            <p className="mt-1 font-semibold capitalize text-slate-900">
-              {project.learning_mode.replace("-", " ")}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Field</p>
+            <p className="text-sm text-slate-500">Subject area</p>
             <p className="mt-1 font-semibold text-slate-900">{project.field_of_study}</p>
           </div>
-
-          <div className="rounded-2xl bg-slate-50 p-4 sm:col-span-2">
-            <p className="text-sm text-slate-500">Source Mode</p>
-            <p className="mt-1 font-semibold capitalize text-slate-900">
-              {project.source_mode.replace("-", " ")}
-            </p>
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Course code</p>
+            <p className="mt-1 font-semibold text-slate-900">{project.course_code ?? "Not set"}</p>
           </div>
-          {project.course_code && (
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm text-slate-500">Course Code</p>
-              <p className="mt-1 font-semibold text-slate-900">{project.course_code}</p>
-            </div>
-          )}
-          {project.term && (
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm text-slate-500">Term</p>
-              <p className="mt-1 font-semibold text-slate-900">{project.term}</p>
-            </div>
-          )}
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Term</p>
+            <p className="mt-1 font-semibold text-slate-900">{project.term ?? "Not set"}</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Instructor</p>
+            <p className="mt-1 font-semibold text-slate-900">{project.instructor ?? "Not set"}</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4 sm:col-span-2">
+            <p className="text-sm text-slate-500">Class schedule</p>
+            <p className="mt-1 font-semibold text-slate-900">{project.meeting_schedule ?? "Not set"}</p>
+          </div>
         </CardContent>
       </Card>
 
       <Card className="rounded-2xl shadow-sm">
         <CardHeader>
-          <CardTitle className="text-slate-900">Source Status</CardTitle>
+          <CardTitle className="text-slate-900">Materials</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between rounded-xl border p-3">
-            <span className="text-sm text-slate-500">Total Sources</span>
+            <span className="text-sm text-slate-500">Total materials</span>
             <span className="font-medium text-slate-900">{counts.total}</span>
           </div>
           <div className="flex items-center justify-between rounded-xl border p-3">
@@ -175,7 +152,7 @@ export default function ProjectOverviewPage() {
 
       <Card className="rounded-2xl shadow-sm">
         <CardHeader>
-          <CardTitle className="text-slate-900">Reviewer Coverage</CardTitle>
+          <CardTitle className="text-slate-900">Notebook</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           {coverage.map((item) => (
@@ -193,24 +170,24 @@ export default function ProjectOverviewPage() {
         </CardHeader>
         <CardContent className="grid gap-3">
           <Button asChild>
-            <Link href={`/projects/${project.id}/planning`}>Open Course Plan</Link>
+            <Link href={routes.coursePlan(project.id)}>Open Plan</Link>
           </Button>
           <Button asChild>
-            <Link href={`/projects/${project.id}/reviewer`}>Open Reviewer</Link>
+            <Link href={routes.courseNotebook(project.id)}>Open Notebook</Link>
           </Button>
           <Button
             asChild
             variant="outline"
             className="border-slate-200 bg-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900"
           >
-            <Link href={`/projects/${project.id}/sources`}>Manage Sources</Link>
+            <Link href={routes.courseMaterials(project.id)}>Add Material</Link>
           </Button>
           <Button
             asChild
             variant="outline"
             className="border-slate-200 bg-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900"
           >
-            <Link href={`/projects/${project.id}/settings`}>Open Settings</Link>
+            <Link href={routes.courseSettings(project.id)}>Course Settings</Link>
           </Button>
         </CardContent>
       </Card>

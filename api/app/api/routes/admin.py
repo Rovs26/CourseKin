@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -10,11 +10,25 @@ from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import BannedUser, GenerationCache, Job, UsageLog
+from app.db.models import (
+    BannedUser,
+    CourseObligation,
+    GenerationCache,
+    Job,
+    PreparationMilestone,
+    UsageLog,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+VALIDATED_OBLIGATION_FIELDS = (
+    "title",
+    "obligation_type",
+    "due_date",
+    "details",
+    "grading_criteria",
+)
 
 
 def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
@@ -55,6 +69,105 @@ def cache_stats(
 
 
 # ── Abuse summary ─────────────────────────────────────────────────────────────
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    return round(numerator / denominator, 4) if denominator else 0.0
+
+
+@router.get("/course-planning/validation")
+def course_planning_validation(
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+):
+    """Return pilot metrics for validated syllabus extraction and preparation activity."""
+    reviewed = (
+        db.query(CourseObligation)
+        .filter(
+            CourseObligation.proposal_snapshot.isnot(None),
+            CourseObligation.reviewed_snapshot.isnot(None),
+        )
+        .all()
+    )
+    confirmed = [
+        item for item in reviewed if (item.reviewed_snapshot or {}).get("status") == "confirmed"
+    ]
+    dismissed = [
+        item for item in reviewed if (item.reviewed_snapshot or {}).get("status") == "dismissed"
+    ]
+    field_corrections = {field: 0 for field in VALIDATED_OBLIGATION_FIELDS}
+    corrected_confirmations = 0
+    for item in confirmed:
+        proposal = item.proposal_snapshot or {}
+        student_review = item.reviewed_snapshot or {}
+        corrected_fields = [
+            field
+            for field in VALIDATED_OBLIGATION_FIELDS
+            if proposal.get(field) != student_review.get(field)
+        ]
+        if corrected_fields:
+            corrected_confirmations += 1
+        for field in corrected_fields:
+            field_corrections[field] += 1
+
+    dated_assessments = (
+        db.query(CourseObligation)
+        .filter(
+            CourseObligation.status == "confirmed",
+            CourseObligation.due_date.isnot(None),
+        )
+        .all()
+    )
+    assessment_ids = [item.id for item in dated_assessments]
+    milestones_by_obligation: dict[str, list[PreparationMilestone]] = {}
+    if assessment_ids:
+        for milestone in (
+            db.query(PreparationMilestone)
+            .filter(PreparationMilestone.obligation_id.in_(assessment_ids))
+            .all()
+        ):
+            milestones_by_obligation.setdefault(milestone.obligation_id, []).append(milestone)
+
+    assessments_with_runway = [
+        item for item in dated_assessments if milestones_by_obligation.get(item.id)
+    ]
+    prepared_before_due_date = 0
+    for assessment in assessments_with_runway:
+        due_date = date.fromisoformat(assessment.due_date)
+        if any(
+            milestone.status == "completed"
+            and milestone.completed_at
+            and date.fromisoformat(milestone.completed_at[:10]) < due_date
+            for milestone in milestones_by_obligation[assessment.id]
+        ):
+            prepared_before_due_date += 1
+
+    unchanged_confirmations = len(confirmed) - corrected_confirmations
+    return {
+        "extraction_review": {
+            "measurable_reviews": len(reviewed),
+            "confirmed": len(confirmed),
+            "dismissed": len(dismissed),
+            "unchanged_confirmations": unchanged_confirmations,
+            "corrected_confirmations": corrected_confirmations,
+            "unchanged_confirmation_rate": _rate(unchanged_confirmations, len(confirmed)),
+            "field_corrections": field_corrections,
+        },
+        "preparation_return": {
+            "confirmed_dated_assessments": len(dated_assessments),
+            "assessments_with_runway": len(assessments_with_runway),
+            "assessments_with_early_completed_session": prepared_before_due_date,
+            "early_preparation_rate": _rate(
+                prepared_before_due_date, len(assessments_with_runway)
+            ),
+        },
+        "notes": [
+            "Extraction metrics cover obligations reviewed after proposal snapshots were introduced.",
+            "Early preparation is a behavioral proxy: at least one planned session completed before the assessment due date.",
+            "A real-student pilot is still required before claiming learning improvement or enabling outbound reminders.",
+        ],
+    }
+
 
 @router.get("/abuse/summary")
 def abuse_summary(

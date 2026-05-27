@@ -21,6 +21,13 @@ const reviewerStatusStyles = {
   failed: "bg-rose-100 text-rose-700",
 };
 
+const reviewerStatusLabels = {
+  ready: "Notebook ready",
+  stale: "Notebook needs update",
+  "not-ready": "Start notebook",
+  failed: "Needs attention",
+};
+
 function formatDate(iso?: string) {
   if (!iso) {
     return "Unknown";
@@ -49,7 +56,7 @@ export function ProjectCard({ summary }: { summary: ProjectSummary }) {
   const { project } = summary;
 
   return (
-    <Card className="rounded-2xl border-0 shadow-sm ring-1 ring-slate-200/70">
+    <Card className="rounded-2xl shadow-none">
       <CardHeader className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -61,22 +68,21 @@ export function ProjectCard({ summary }: { summary: ProjectSummary }) {
             </p>
           </div>
 
-          <Badge
-            variant="secondary"
-            className="border-0 bg-slate-100 capitalize text-slate-700"
-          >
-            {project.learning_mode.replace("-", " ")}
-          </Badge>
+          {project.course_code && (
+            <Badge variant="secondary" className="border-0 bg-slate-100 text-slate-700">
+              {project.course_code}
+            </Badge>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2">
           <span
             className={cn(
-              "rounded-full px-2.5 py-1 text-xs font-medium capitalize",
+              "rounded-full px-2.5 py-1 text-xs font-medium",
               reviewerStatusStyles[summary.reviewer_status]
             )}
           >
-            {summary.reviewer_status.replace("-", " ")}
+            {reviewerStatusLabels[summary.reviewer_status]}
           </span>
 
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
@@ -88,7 +94,7 @@ export function ProjectCard({ summary }: { summary: ProjectSummary }) {
       <CardContent className="space-y-4">
         <div>
           <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="text-slate-500">Reviewer coverage</span>
+            <span className="text-slate-500">Notebook coverage</span>
             <span className="font-medium text-slate-900">
               {summary.reviewer_coverage_percent}%
             </span>
@@ -97,12 +103,11 @@ export function ProjectCard({ summary }: { summary: ProjectSummary }) {
         </div>
 
         <div className="flex flex-wrap gap-2 text-xs">
-          <span className="rounded-full bg-slate-100 px-2 py-1 capitalize text-slate-600">
-            {project.project_type}
-          </span>
-          <span className="rounded-full bg-slate-100 px-2 py-1 capitalize text-slate-600">
-            {project.age_bracket.replace("-", " ")}
-          </span>
+          {project.term && (
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
+              {project.term}
+            </span>
+          )}
           <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
             {project.field_of_study}
           </span>
@@ -114,7 +119,7 @@ export function ProjectCard({ summary }: { summary: ProjectSummary }) {
           href={`/projects/${project.id}`}
           className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
         >
-          Open Project
+          Open Course
           <ArrowRight className="h-4 w-4" />
         </Link>
       </CardFooter>

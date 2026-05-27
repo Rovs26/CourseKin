@@ -13,7 +13,15 @@ from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import CourseObligation, PreparationMilestone, Project, Source, SourceChunk
+from app.db.models import (
+    CourseObligation,
+    CourseStreamEntry,
+    CourseStreamEntrySource,
+    PreparationMilestone,
+    Project,
+    Source,
+    SourceChunk,
+)
 from app.schemas.source import (
     PresignUploadRequest,
     FinalizeUploadRequest,
@@ -403,6 +411,31 @@ def delete_source(
             PreparationMilestone.obligation_id.in_(obligation_ids)
         ).delete(synchronize_session=False)
     db.query(CourseObligation).filter(CourseObligation.source_id == source_id).delete()
+    linked_entry_ids = [
+        link.entry_id
+        for link in db.query(CourseStreamEntrySource).filter(
+            CourseStreamEntrySource.source_id == source_id
+        ).all()
+    ]
+    if linked_entry_ids:
+        for entry in db.query(CourseStreamEntry).filter(
+            CourseStreamEntry.id.in_(linked_entry_ids)
+        ).all():
+            entry.answer_status = None
+            entry.answer_mode = None
+            entry.answer_content = None
+            entry.answer_evidence = None
+            entry.answer_job_id = None
+            entry.answer_generated_at = None
+            entry.coaching_status = None
+            entry.coaching_output = None
+            entry.coaching_evidence = None
+            entry.coaching_job_id = None
+            entry.coaching_generated_at = None
+            entry.updated_at = utc_now_iso()
+    db.query(CourseStreamEntrySource).filter(
+        CourseStreamEntrySource.source_id == source_id
+    ).delete()
     db.query(SourceChunk).filter(SourceChunk.source_id == source_id).delete()
     db.delete(source)
     db.commit()

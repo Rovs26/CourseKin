@@ -7,14 +7,16 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.routes import planning
+from app.api.routes import admin, planning
 from app.core.auth import CurrentUser
 from app.core.utils import utc_now_iso
 from app.db.database import Base
-from app.db.models import CourseObligation, PreparationMilestone, Project, Source
+from app.db.models import CourseObligation, CourseTask, PreparationMilestone, Project, Source
 from app.schemas.planning import (
     BuildPreparationPlanRequest,
     CourseObligationReviewRequest,
+    CourseTaskCreateRequest,
+    CourseTaskUpdateRequest,
     PreparationMilestoneUpdateRequest,
     ReminderPreferenceUpdateRequest,
     SyllabusExtractionRequest,
@@ -365,3 +367,206 @@ def test_in_app_reminders_follow_course_preferences_and_lead_time(db):
     )
     disabled = planning.list_preparation_reminders("2026-08-01", db, user)
     assert disabled["items"] == []
+
+
+def test_phase_b_validation_preserves_first_review_and_tracks_early_preparation(db):
+    now = _seed_course(db)
+    proposed = CourseObligation(
+        id="validated-quiz",
+        project_id="course-1",
+        source_id="syllabus-1",
+        title="Quiz One",
+        obligation_type="quiz",
+        due_date="2099-08-17",
+        details="Chapters 1 and 2",
+        grading_criteria=None,
+        confidence="high",
+        uncertain_fields=[],
+        status="proposed",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(proposed)
+    db.commit()
+    user = CurrentUser("user-1", "student@example.com", None, True)
+
+    planning.review_course_obligation(
+        "course-1",
+        "validated-quiz",
+        CourseObligationReviewRequest(
+            title="Quiz One",
+            obligation_type="quiz",
+            due_date="2099-08-18",
+            details="Chapters 1 and 2",
+            status="confirmed",
+        ),
+        db,
+        user,
+    )
+    db.add(
+        PreparationMilestone(
+            id="early-session",
+            project_id="course-1",
+            obligation_id="validated-quiz",
+            title="Practice quiz",
+            milestone_type="practice",
+            sequence=1,
+            scheduled_date="2099-08-10",
+            estimated_minutes=30,
+            status="completed",
+            completed_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.commit()
+
+    planning.review_course_obligation(
+        "course-1",
+        "validated-quiz",
+        CourseObligationReviewRequest(
+            title="Quiz One final",
+            obligation_type="quiz",
+            due_date="2099-08-19",
+            details="Revised later",
+            status="confirmed",
+        ),
+        db,
+        user,
+    )
+
+    item = db.get(CourseObligation, "validated-quiz")
+    assert item.proposal_snapshot["due_date"] == "2099-08-17"
+    assert item.reviewed_snapshot["due_date"] == "2099-08-18"
+
+    report = admin.course_planning_validation(db, user)
+    assert report["extraction_review"]["measurable_reviews"] == 1
+    assert report["extraction_review"]["corrected_confirmations"] == 1
+    assert report["extraction_review"]["field_corrections"]["due_date"] == 1
+    assert report["preparation_return"]["assessments_with_runway"] == 1
+    assert report["preparation_return"]["assessments_with_early_completed_session"] == 1
+    assert report["preparation_return"]["early_preparation_rate"] == 1.0
+
+
+def test_calendar_agenda_includes_tasks_sessions_and_only_confirmed_deadlines(db):
+    now = _seed_course(db)
+    db.add_all(
+        [
+            CourseObligation(
+                id="calendar-confirmed",
+                project_id="course-1",
+                source_id="syllabus-1",
+                title="Midterm Exam",
+                obligation_type="exam",
+                due_date="2026-08-20",
+                details="Units 1 to 3",
+                grading_criteria=None,
+                confidence="high",
+                uncertain_fields=[],
+                status="confirmed",
+                created_at=now,
+                updated_at=now,
+            ),
+            CourseObligation(
+                id="calendar-proposed",
+                project_id="course-1",
+                source_id="syllabus-1",
+                title="Unconfirmed Quiz",
+                obligation_type="quiz",
+                due_date="2026-08-12",
+                details=None,
+                grading_criteria=None,
+                confidence="medium",
+                uncertain_fields=[],
+                status="proposed",
+                created_at=now,
+                updated_at=now,
+            ),
+            PreparationMilestone(
+                id="calendar-session",
+                project_id="course-1",
+                obligation_id="calendar-confirmed",
+                title="Practice recall",
+                milestone_type="practice",
+                sequence=1,
+                scheduled_date="2026-08-15",
+                estimated_minutes=30,
+                status="planned",
+                completed_at=None,
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+    )
+    db.commit()
+    user = CurrentUser("user-1", "student@example.com", None, True)
+    task = planning.create_course_task.__wrapped__(
+        MagicMock(),
+        "course-1",
+        CourseTaskCreateRequest(
+            title="Bring calculator",
+            due_date="2026-08-20",
+            priority="high",
+        ),
+        db,
+        user,
+    )
+
+    agenda = planning.get_calendar_agenda(
+        "2026-08-01",
+        "2026-08-31",
+        "2026-08-01",
+        db,
+        user,
+    )
+
+    assert {item["item_type"] for item in agenda["items"]} == {
+        "deadline",
+        "preparation_session",
+        "task",
+    }
+    assert all(item["title"] != "Unconfirmed Quiz" for item in agenda["items"])
+    assert agenda["open_tasks"] == 1
+    assert agenda["upcoming_deadlines"] == 1
+
+    completed = planning.update_course_task.__wrapped__(
+        MagicMock(),
+        "course-1",
+        task["id"],
+        CourseTaskUpdateRequest(status="completed"),
+        db,
+        user,
+    )
+    assert completed["status"] == "completed"
+    assert completed["completed_at"] is not None
+
+
+def test_course_tasks_are_owner_scoped_and_support_unscheduled_work(db):
+    _seed_course(db)
+    user = CurrentUser("user-1", "student@example.com", None, True)
+    planning.create_course_task.__wrapped__(
+        MagicMock(),
+        "course-1",
+        CourseTaskCreateRequest(title="Choose paper topic", priority="medium"),
+        db,
+        user,
+    )
+
+    agenda = planning.get_calendar_agenda(
+        "2026-08-01",
+        "2026-08-31",
+        "2026-08-01",
+        db,
+        user,
+    )
+    assert agenda["unscheduled_tasks"][0]["title"] == "Choose paper topic"
+    assert db.query(CourseTask).count() == 1
+
+    with pytest.raises(HTTPException):
+        planning.create_course_task.__wrapped__(
+            MagicMock(),
+            "course-1",
+            CourseTaskCreateRequest(title="Not my course"),
+            db,
+            CurrentUser("user-2", "other@example.com", None, True),
+        )

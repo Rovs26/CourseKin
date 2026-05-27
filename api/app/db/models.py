@@ -111,6 +111,21 @@ class ReviewerFeedback(Base):
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    reviewer_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    results: Mapped[list] = mapped_column(JSON, nullable=False)
+    total_questions: Mapped[int] = mapped_column(Integer, nullable=False)
+    correct_answers: Mapped[int] = mapped_column(Integer, nullable=False)
+    score_percent: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class CourseObligation(Base):
     __tablename__ = "course_obligations"
 
@@ -125,6 +140,9 @@ class CourseObligation(Base):
     confidence: Mapped[str] = mapped_column(String, nullable=False)
     uncertain_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
+    proposal_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    reviewed_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    reviewed_at: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -144,6 +162,64 @@ class PreparationMilestone(Base):
     completed_at: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class CourseTask(Base):
+    __tablename__ = "course_tasks"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    due_date: Mapped[str | None] = mapped_column(String, nullable=True)
+    priority: Mapped[str] = mapped_column(String, nullable=False, default="medium")
+    status: Mapped[str] = mapped_column(String, nullable=False, default="open")
+    origin: Mapped[str] = mapped_column(String, nullable=False, default="student")
+    completed_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class CourseStreamEntry(Base):
+    __tablename__ = "course_stream_entries"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    entry_type: Mapped[str] = mapped_column(String, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    confusion_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    answer_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    answer_mode: Mapped[str | None] = mapped_column(String, nullable=True)
+    answer_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    answer_evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    answer_job_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    answer_generated_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    coaching_mode: Mapped[str | None] = mapped_column(String, nullable=True)
+    related_obligation_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    coaching_context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    coaching_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    coaching_output: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    coaching_evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    coaching_job_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    coaching_generated_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class CourseStreamEntrySource(Base):
+    __tablename__ = "course_stream_entry_sources"
+    __table_args__ = (
+        UniqueConstraint("entry_id", "source_id", name="uq_course_stream_entry_source"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    entry_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class UsageLog(Base):

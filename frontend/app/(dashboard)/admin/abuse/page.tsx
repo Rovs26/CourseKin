@@ -5,13 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   getAbuseSummary,
+  getCoursePlanningValidation,
   banUser,
   unbanUser,
   type AbuseSummary,
+  type CoursePlanningValidation,
 } from "@/lib/coursekin-api";
 
 export default function AbusePage() {
   const [summary, setSummary] = useState<AbuseSummary | null>(null);
+  const [validation, setValidation] = useState<CoursePlanningValidation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [banUserId, setBanUserId] = useState("");
@@ -22,7 +25,12 @@ export default function AbusePage() {
     setLoading(true);
     setError(null);
     try {
-      setSummary(await getAbuseSummary());
+      const [abuseSummary, planningValidation] = await Promise.all([
+        getAbuseSummary(),
+        getCoursePlanningValidation(),
+      ]);
+      setSummary(abuseSummary);
+      setValidation(planningValidation);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load summary");
     } finally {
@@ -78,7 +86,7 @@ export default function AbusePage() {
   return (
     <div className="space-y-6 p-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Abuse Dashboard</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Operations Dashboard</h1>
         <Button variant="outline" onClick={loadSummary} className="rounded-xl text-sm">
           Refresh
         </Button>
@@ -89,6 +97,76 @@ export default function AbusePage() {
           {actionMsg}
         </p>
       )}
+
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Phase B Validation: Syllabus Review</CardTitle>
+          <p className="text-sm text-slate-500">
+            First student decisions compared with the original AI proposal.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-4">
+            {[
+              ["Measured reviews", validation?.extraction_review.measurable_reviews ?? 0],
+              ["Confirmed", validation?.extraction_review.confirmed ?? 0],
+              ["Corrected", validation?.extraction_review.corrected_confirmations ?? 0],
+              [
+                "Unchanged rate",
+                `${Math.round((validation?.extraction_review.unchanged_confirmation_rate ?? 0) * 100)}%`,
+              ],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">{label}</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">{value}</p>
+              </div>
+            ))}
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Corrections by field
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {Object.entries(validation?.extraction_review.field_corrections ?? {}).map(
+                ([field, value]) => (
+                  <span key={field} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                    {field.replaceAll("_", " ")}: {value}
+                  </span>
+                )
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Phase B Validation: Early Preparation</CardTitle>
+          <p className="text-sm text-slate-500">
+            A return proxy based on completing a planned session before a confirmed assessment date.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              ["Dated assessments", validation?.preparation_return.confirmed_dated_assessments ?? 0],
+              ["With runway", validation?.preparation_return.assessments_with_runway ?? 0],
+              [
+                "Early preparation rate",
+                `${Math.round((validation?.preparation_return.early_preparation_rate ?? 0) * 100)}%`,
+              ],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs text-slate-500">{label}</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">{value}</p>
+              </div>
+            ))}
+          </div>
+          <ul className="space-y-1 text-xs text-slate-500">
+            {validation?.notes.map((note) => <li key={note}>{note}</li>)}
+          </ul>
+        </CardContent>
+      </Card>
 
       {/* High volume */}
       <Card className="rounded-2xl shadow-sm">

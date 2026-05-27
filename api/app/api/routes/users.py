@@ -18,10 +18,14 @@ from app.db.database import get_db
 from app.api.routes.billing import revoke_polar_subscription
 from app.db.models import (
     CourseObligation,
+    CourseStreamEntry,
+    CourseStreamEntrySource,
+    CourseTask,
     GenerationCache,
     Job,
     PreparationMilestone,
     Project,
+    QuizAttempt,
     Reviewer,
     ReviewerFeedback,
     Source,
@@ -90,6 +94,30 @@ def export_my_data(
         ).scalars().all()
         if project_ids else []
     )
+    course_tasks = (
+        db.execute(
+            select(CourseTask).where(CourseTask.project_id.in_(project_ids))
+        ).scalars().all()
+        if project_ids else []
+    )
+
+    course_stream_entries = (
+        db.execute(
+            select(CourseStreamEntry).where(CourseStreamEntry.project_id.in_(project_ids))
+        ).scalars().all()
+        if project_ids else []
+    )
+    course_stream_entry_sources = (
+        db.execute(
+            select(CourseStreamEntrySource).where(
+                CourseStreamEntrySource.project_id.in_(project_ids)
+            )
+        ).scalars().all()
+        if project_ids else []
+    )
+    linked_source_ids_by_entry: dict[str, list[str]] = {}
+    for link in sorted(course_stream_entry_sources, key=lambda item: item.ordinal):
+        linked_source_ids_by_entry.setdefault(link.entry_id, []).append(link.source_id)
 
     jobs = (
         db.execute(
@@ -108,6 +136,12 @@ def export_my_data(
     reviewer_feedback = (
         db.execute(
             select(ReviewerFeedback).where(ReviewerFeedback.project_id.in_(project_ids))
+        ).scalars().all()
+        if project_ids else []
+    )
+    quiz_attempts = (
+        db.execute(
+            select(QuizAttempt).where(QuizAttempt.project_id.in_(project_ids))
         ).scalars().all()
         if project_ids else []
     )
@@ -202,6 +236,9 @@ def export_my_data(
             "confidence": obligation.confidence,
             "uncertain_fields": obligation.uncertain_fields,
             "status": obligation.status,
+            "proposal_snapshot": obligation.proposal_snapshot,
+            "reviewed_snapshot": obligation.reviewed_snapshot,
+            "reviewed_at": obligation.reviewed_at,
             "created_at": obligation.created_at,
             "updated_at": obligation.updated_at,
         }
@@ -220,6 +257,47 @@ def export_my_data(
             "completed_at": milestone.completed_at,
             "created_at": milestone.created_at,
             "updated_at": milestone.updated_at,
+        }
+
+    def task_to_dict(task: CourseTask) -> dict:
+        return {
+            "id": task.id,
+            "project_id": task.project_id,
+            "title": task.title,
+            "notes": task.notes,
+            "due_date": task.due_date,
+            "priority": task.priority,
+            "status": task.status,
+            "origin": task.origin,
+            "completed_at": task.completed_at,
+            "created_at": task.created_at,
+            "updated_at": task.updated_at,
+        }
+
+    def stream_entry_to_dict(entry: CourseStreamEntry) -> dict:
+        return {
+            "id": entry.id,
+            "project_id": entry.project_id,
+            "entry_type": entry.entry_type,
+            "content": entry.content,
+            "linked_source_ids": linked_source_ids_by_entry.get(entry.id, []),
+            "confusion_status": entry.confusion_status,
+            "answer_status": entry.answer_status,
+            "answer_mode": entry.answer_mode,
+            "answer_content": entry.answer_content,
+            "answer_evidence": entry.answer_evidence,
+            "answer_job_id": entry.answer_job_id,
+            "answer_generated_at": entry.answer_generated_at,
+            "coaching_mode": entry.coaching_mode,
+            "related_obligation_id": entry.related_obligation_id,
+            "coaching_context": entry.coaching_context,
+            "coaching_status": entry.coaching_status,
+            "coaching_output": entry.coaching_output,
+            "coaching_evidence": entry.coaching_evidence,
+            "coaching_job_id": entry.coaching_job_id,
+            "coaching_generated_at": entry.coaching_generated_at,
+            "created_at": entry.created_at,
+            "updated_at": entry.updated_at,
         }
 
     def reviewer_to_dict(r: Reviewer) -> dict:
@@ -257,6 +335,19 @@ def export_my_data(
             "comment": feedback.comment,
             "created_at": feedback.created_at,
             "updated_at": feedback.updated_at,
+        }
+
+    def quiz_attempt_to_dict(attempt: QuizAttempt) -> dict:
+        return {
+            "id": attempt.id,
+            "project_id": attempt.project_id,
+            "reviewer_version": attempt.reviewer_version,
+            "results": attempt.results,
+            "total_questions": attempt.total_questions,
+            "correct_answers": attempt.correct_answers,
+            "score_percent": attempt.score_percent,
+            "duration_seconds": attempt.duration_seconds,
+            "created_at": attempt.created_at,
         }
 
     def cache_to_dict(entry: GenerationCache) -> dict:
@@ -318,6 +409,31 @@ def export_my_data(
             json.dumps([milestone_to_dict(item) for item in preparation_milestones], indent=2),
         )
         zf.writestr(
+            "course_tasks.json",
+            json.dumps([task_to_dict(item) for item in course_tasks], indent=2),
+        )
+        zf.writestr(
+            "course_stream_entries.json",
+            json.dumps([stream_entry_to_dict(item) for item in course_stream_entries], indent=2),
+        )
+        zf.writestr(
+            "course_stream_entry_sources.json",
+            json.dumps(
+                [
+                    {
+                        "id": item.id,
+                        "entry_id": item.entry_id,
+                        "source_id": item.source_id,
+                        "project_id": item.project_id,
+                        "ordinal": item.ordinal,
+                        "created_at": item.created_at,
+                    }
+                    for item in course_stream_entry_sources
+                ],
+                indent=2,
+            ),
+        )
+        zf.writestr(
             "jobs.json",
             json.dumps([job_to_dict(j) for j in jobs], indent=2),
         )
@@ -328,6 +444,10 @@ def export_my_data(
         zf.writestr(
             "reviewer_feedback.json",
             json.dumps([feedback_to_dict(feedback) for feedback in reviewer_feedback], indent=2),
+        )
+        zf.writestr(
+            "quiz_attempts.json",
+            json.dumps([quiz_attempt_to_dict(attempt) for attempt in quiz_attempts], indent=2),
         )
         zf.writestr(
             "usage_log.json",
@@ -400,8 +520,24 @@ def delete_my_account(
             )
         )
         db.execute(
+            QuizAttempt.__table__.delete().where(QuizAttempt.project_id.in_(project_ids))
+        )
+        db.execute(
             PreparationMilestone.__table__.delete().where(
                 PreparationMilestone.project_id.in_(project_ids)
+            )
+        )
+        db.execute(
+            CourseTask.__table__.delete().where(CourseTask.project_id.in_(project_ids))
+        )
+        db.execute(
+            CourseStreamEntrySource.__table__.delete().where(
+                CourseStreamEntrySource.project_id.in_(project_ids)
+            )
+        )
+        db.execute(
+            CourseStreamEntry.__table__.delete().where(
+                CourseStreamEntry.project_id.in_(project_ids)
             )
         )
         db.execute(

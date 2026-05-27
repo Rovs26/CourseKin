@@ -50,7 +50,7 @@ function CourseProfileForm({
       <CardHeader>
         <CardTitle className="text-lg text-slate-900">Course Profile</CardTitle>
         <p className="text-sm text-slate-500">
-          Add semester context to an existing reviewer workspace.
+          Add the details that help you recognize and plan this course.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -97,7 +97,7 @@ export default function ProjectSettingsPage() {
       router.push("/projects");
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Failed to delete project."
+        err instanceof Error ? err.message : "Failed to delete course."
       );
     } finally {
       setIsDeleting(false);
@@ -116,8 +116,8 @@ export default function ProjectSettingsPage() {
   if (error || !project) {
     return (
       <EmptyState
-        title="Project not found"
-        description={error ?? "This project does not exist in the current workspace."}
+        title="Course not found"
+        description={error ?? "This course does not exist in your workspace."}
       />
     );
   }
@@ -131,8 +131,8 @@ export default function ProjectSettingsPage() {
       <div className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
         <h3 className="text-lg font-semibold text-red-900">Danger Zone</h3>
         <p className="mt-2 text-sm text-slate-600">
-          Deleting this project will permanently remove all its sources, jobs,
-          and reviewer data. This action cannot be undone.
+          Deleting this course will permanently remove its materials, planning records,
+          room entries, and notebook. This action cannot be undone.
         </p>
 
         {deleteError && (
@@ -162,7 +162,7 @@ export default function ProjectSettingsPage() {
             className="mt-4"
             onClick={() => setShowConfirm(true)}
           >
-            Delete Project
+            Delete Course
           </Button>
         )}
       </div>

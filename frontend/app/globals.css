@@ -4,46 +4,46 @@
 
 :root {
   color-scheme: light;
-  --ck-ink: #12343b;
-  --ck-primary: #087f75;
-  --ck-primary-hover: #06665f;
-  --ck-primary-soft: #e7f5f1;
-  --ck-primary-border: #b7ded6;
-  --ck-accent: #e5a83f;
-  --ck-accent-soft: #fff3dc;
-  --ck-bg: #f6faf8;
-  --ck-shell-bg: #edf5f2;
-  --ck-ring: #43aa9d;
+  --ck-ink: #202722;
+  --ck-primary: #27604b;
+  --ck-primary-hover: #1e4b3a;
+  --ck-primary-soft: #e5ede7;
+  --ck-primary-border: #becdbf;
+  --ck-accent: #b76642;
+  --ck-accent-soft: #f3e7de;
+  --ck-bg: #f7f5ef;
+  --ck-shell-bg: #f1eee6;
+  --ck-ring: #39745c;
   --rf-bg: var(--ck-bg);
   --rf-shell-bg: var(--ck-shell-bg);
-  --rf-card: #ffffff;
-  --rf-soft: #f2f8f5;
-  --rf-soft-2: #d7e9e4;
-  --rf-text: #12343b;
-  --rf-text-muted: #5b7272;
-  --rf-border: #d7e9e4;
+  --rf-card: #fffdf8;
+  --rf-soft: #f4f1ea;
+  --rf-soft-2: #e6e0d5;
+  --rf-text: #202722;
+  --rf-text-muted: #626b62;
+  --rf-border: #ded8cc;
 }
 
 html.dark {
   color-scheme: dark;
-  --ck-ink: #071b21;
-  --ck-primary: #0b8278;
-  --ck-primary-hover: #15968a;
-  --ck-primary-soft: #123630;
-  --ck-primary-border: #24574f;
-  --ck-accent: #f1bc61;
-  --ck-accent-soft: #322816;
-  --ck-bg: #08171d;
-  --ck-shell-bg: #07141a;
-  --ck-ring: #42b9ab;
+  --ck-ink: #ede8df;
+  --ck-primary: #4f9273;
+  --ck-primary-hover: #65a488;
+  --ck-primary-soft: #24332a;
+  --ck-primary-border: #3c5145;
+  --ck-accent: #d28a67;
+  --ck-accent-soft: #38271f;
+  --ck-bg: #161a17;
+  --ck-shell-bg: #121613;
+  --ck-ring: #75ae91;
   --rf-bg: var(--ck-bg);
   --rf-shell-bg: var(--ck-shell-bg);
-  --rf-card: #10252b;
-  --rf-soft: #122b31;
-  --rf-soft-2: #1b3a40;
-  --rf-text: #f2f8f5;
-  --rf-text-muted: #9bb9b4;
-  --rf-border: #234047;
+  --rf-card: #1d221e;
+  --rf-soft: #232a25;
+  --rf-soft-2: #303830;
+  --rf-text: #f0ebe2;
+  --rf-text-muted: #aba89f;
+  --rf-border: #343c35;
 }
 
 @layer base {
@@ -68,17 +68,11 @@ html.dark {
 }
 
 .brand-wash {
-  background:
-    radial-gradient(circle at 76% 8%, rgba(8, 127, 117, 0.13), transparent 34rem),
-    radial-gradient(circle at 10% 30%, rgba(229, 168, 63, 0.09), transparent 25rem),
-    var(--ck-bg);
+  background: var(--ck-bg);
 }
 
 html.dark .brand-wash {
-  background:
-    radial-gradient(circle at 76% 8%, rgba(8, 127, 117, 0.22), transparent 34rem),
-    radial-gradient(circle at 10% 30%, rgba(229, 168, 63, 0.08), transparent 25rem),
-    var(--ck-bg);
+  background: var(--ck-bg);
 }
 
 html.dark .bg-white {
@@ -86,19 +80,19 @@ html.dark .bg-white {
 }
 
 html.dark .bg-white\/90 {
-  background-color: rgba(15, 23, 42, 0.9) !important;
+  background-color: rgba(29, 34, 30, 0.92) !important;
 }
 
 html.dark .bg-white\/75 {
-  background-color: rgba(16, 37, 43, 0.82) !important;
+  background-color: rgba(29, 34, 30, 0.82) !important;
 }
 
 html.dark .bg-white\/70 {
-  background-color: rgba(16, 37, 43, 0.76) !important;
+  background-color: rgba(29, 34, 30, 0.76) !important;
 }
 
 html.dark .bg-white\/60 {
-  background-color: rgba(16, 37, 43, 0.68) !important;
+  background-color: rgba(29, 34, 30, 0.68) !important;
 }
 
 html.dark .bg-slate-50 {
@@ -115,11 +109,11 @@ html.dark .text-slate-900 {
 }
 
 html.dark .text-slate-700 {
-  color: #cbd5e1 !important;
+  color: #d9d3c8 !important;
 }
 
 html.dark .text-slate-600 {
-  color: #94a3b8 !important;
+  color: #beb8ae !important;
 }
 
 html.dark .text-slate-500 {
@@ -127,7 +121,7 @@ html.dark .text-slate-500 {
 }
 
 html.dark .text-slate-400 {
-  color: #94a3b8 !important;
+  color: #aba89f !important;
 }
 
 html.dark .bg-slate-200 {
@@ -140,7 +134,7 @@ html.dark .border-slate-200 {
 }
 
 html.dark .bg-slate-100 {
-  background-color: rgba(100, 116, 139, 0.18) !important;
+  background-color: var(--rf-soft-2) !important;
 }
 
 html.dark .ring-slate-200\/70 {

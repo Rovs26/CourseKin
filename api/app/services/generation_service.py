@@ -12,7 +12,7 @@ from app.db.models import Job, Reviewer, GenerationCache
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "v2a-cited-reviewers"
+PROMPT_VERSION = "v2d-topic-tagged-quiz"
 
 # Pricing per million tokens: (input_usd, output_usd)
 PRICING: dict[str, tuple[float, float]] = {
@@ -36,7 +36,7 @@ SECTION_SCHEMA = {
     "key_points": '"key_points": ["string"]',
     "definitions": '"definitions": [{"term": "string", "definition": "string"}]',
     "qa": '"qa": [{"question": "string", "answer": "string"}]',
-    "quiz": '"quiz": [{"question": "string", "choices": ["string"], "answer": "string", "rationale": "string"}]',
+    "quiz": '"quiz": [{"topic": "short source-grounded concept label", "question": "string", "choices": ["string"], "answer": "string", "rationale": "string"}]',
     "flashcards": '"flashcards": [{"front": "string", "back": "string"}]',
 }
 
@@ -45,7 +45,7 @@ SECTION_INSTRUCTIONS = {
     "key_points": "Extract key testable concepts that are directly and explicitly stated in the source text. Do not include facts, trivia, or information not present in the source. Focus on concepts the student needs to know to pass an exam on this specific material.",
     "definitions": "Include every important term from the source that a student may need to memorize or explain.",
     "qa": "Create substantial study questions and direct model answers. Questions should help with recall, explanation, and understanding.",
-    "quiz": "Create multiple choice items that test core understanding. Make the distractors plausible but still grounded in the source.",
+    "quiz": "Create multiple choice items that test core understanding. For each question, include one concise topic label that is explicitly supported by the cited source text. Make the distractors plausible but still grounded in the source.",
     "flashcards": "Create memorization ready flashcards for facts, concepts, and relationships.",
 }
 

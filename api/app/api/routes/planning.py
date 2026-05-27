@@ -10,13 +10,18 @@ from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import CourseObligation, Job, PreparationMilestone, Project, Source
+from app.db.models import CourseObligation, CourseTask, Job, PreparationMilestone, Project, Source
 from app.schemas.job import JobResponse
 from app.schemas.planning import (
     BuildPreparationPlanRequest,
+    CalendarAgendaResponse,
     CourseObligationListResponse,
     CourseObligationResponse,
     CourseObligationReviewRequest,
+    CourseTaskCreateRequest,
+    CourseTaskListResponse,
+    CourseTaskResponse,
+    CourseTaskUpdateRequest,
     PreparationMilestoneResponse,
     PreparationMilestoneUpdateRequest,
     PreparationReminderListResponse,
@@ -63,6 +68,29 @@ def _obligation_to_dict(item: CourseObligation) -> dict:
     }
 
 
+def _proposal_snapshot_from_item(item: CourseObligation) -> dict:
+    return {
+        "title": item.title,
+        "obligation_type": item.obligation_type,
+        "due_date": item.due_date,
+        "details": item.details,
+        "grading_criteria": item.grading_criteria,
+        "confidence": item.confidence,
+        "uncertain_fields": item.uncertain_fields or [],
+    }
+
+
+def _review_snapshot(payload: CourseObligationReviewRequest) -> dict:
+    return {
+        "title": payload.title,
+        "obligation_type": payload.obligation_type,
+        "due_date": payload.due_date,
+        "details": payload.details,
+        "grading_criteria": payload.grading_criteria,
+        "status": payload.status,
+    }
+
+
 def _job_to_dict(job: Job) -> dict:
     return {
         "id": job.id,
@@ -94,11 +122,52 @@ def _milestone_to_dict(item: PreparationMilestone) -> dict:
     }
 
 
+def _task_to_dict(item: CourseTask, project: Project) -> dict:
+    return {
+        "id": item.id,
+        "project_id": item.project_id,
+        "project_title": project.title,
+        "course_code": project.course_code,
+        "title": item.title,
+        "notes": item.notes,
+        "due_date": item.due_date,
+        "priority": item.priority,
+        "status": item.status,
+        "origin": item.origin,
+        "completed_at": item.completed_at,
+        "created_at": item.created_at,
+        "updated_at": item.updated_at,
+    }
+
+
 def _parse_reference_date(value: str | None) -> date:
     try:
         return date.fromisoformat(value) if value else date.today()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Planning date must use YYYY-MM-DD format") from exc
+
+
+def _calendar_range(
+    start_date: str | None,
+    end_date: str | None,
+    reference_date: date,
+) -> tuple[date, date]:
+    first_day = date(reference_date.year, reference_date.month, 1)
+    next_month = (
+        date(reference_date.year + 1, 1, 1)
+        if reference_date.month == 12
+        else date(reference_date.year, reference_date.month + 1, 1)
+    )
+    try:
+        start = date.fromisoformat(start_date) if start_date else first_day
+        end = date.fromisoformat(end_date) if end_date else next_month - timedelta(days=1)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Calendar dates must use YYYY-MM-DD format") from exc
+    if start > end:
+        raise HTTPException(status_code=422, detail="Calendar start date must be before end date")
+    if (end - start).days > 366:
+        raise HTTPException(status_code=422, detail="Calendar range cannot exceed one year")
+    return start, end
 
 
 def _runway_to_dict(
@@ -281,7 +350,13 @@ def review_course_obligation(
     if not item or item.project_id != project_id:
         raise HTTPException(status_code=404, detail="Obligation not found")
 
+    now = utc_now_iso()
     existing_plan_basis = (item.title, item.obligation_type, item.due_date, item.status)
+    if item.proposal_snapshot is None and item.status == "proposed":
+        item.proposal_snapshot = _proposal_snapshot_from_item(item)
+    if item.reviewed_snapshot is None:
+        item.reviewed_snapshot = _review_snapshot(payload)
+        item.reviewed_at = now
     item.title = payload.title
     item.obligation_type = payload.obligation_type
     item.due_date = payload.due_date
@@ -289,7 +364,7 @@ def review_course_obligation(
     item.grading_criteria = payload.grading_criteria
     item.status = payload.status
     item.uncertain_fields = []
-    item.updated_at = utc_now_iso()
+    item.updated_at = now
     updated_plan_basis = (item.title, item.obligation_type, item.due_date, item.status)
     if payload.status != "confirmed" or existing_plan_basis != updated_plan_basis:
         db.query(PreparationMilestone).filter(
@@ -489,6 +564,247 @@ def list_preparation_reminders(
         )
     )
     return {"items": reminders[:20], "total": len(reminders), "reference_date": today.isoformat()}
+
+
+@router.get("/planning/tasks", response_model=CourseTaskListResponse)
+def list_course_tasks(
+    include_completed: bool = False,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    projects = db.query(Project).filter(Project.user_id == current_user.user_id).all()
+    projects_by_id = {project.id: project for project in projects}
+    if not projects_by_id:
+        return {"items": [], "total": 0}
+    query = db.query(CourseTask).filter(
+        CourseTask.user_id == current_user.user_id,
+        CourseTask.project_id.in_(projects_by_id),
+    )
+    if not include_completed:
+        query = query.filter(CourseTask.status == "open")
+    tasks = query.all()
+    tasks.sort(
+        key=lambda item: (
+            item.status == "completed",
+            item.due_date is None,
+            item.due_date or "",
+            {"high": 0, "medium": 1, "low": 2}.get(item.priority, 3),
+            item.created_at,
+        )
+    )
+    return {
+        "items": [_task_to_dict(item, projects_by_id[item.project_id]) for item in tasks],
+        "total": len(tasks),
+    }
+
+
+@router.post(
+    "/projects/{project_id}/planning/tasks",
+    response_model=CourseTaskResponse,
+)
+@limiter.limit("60/hour")
+def create_course_task(
+    request: Request,
+    project_id: str,
+    payload: CourseTaskCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    project = _require_owned_project(db, project_id, current_user)
+    now = utc_now_iso()
+    task = CourseTask(
+        id=str(uuid4()),
+        user_id=current_user.user_id,
+        project_id=project_id,
+        title=payload.title,
+        notes=payload.notes,
+        due_date=payload.due_date,
+        priority=payload.priority,
+        status="open",
+        origin="student",
+        completed_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return _task_to_dict(task, project)
+
+
+@router.patch(
+    "/projects/{project_id}/planning/tasks/{task_id}",
+    response_model=CourseTaskResponse,
+)
+@limiter.limit("120/hour")
+def update_course_task(
+    request: Request,
+    project_id: str,
+    task_id: str,
+    payload: CourseTaskUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    project = _require_owned_project(db, project_id, current_user)
+    task = db.get(CourseTask, task_id)
+    if not task or task.project_id != project_id or task.user_id != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+    updates = payload.model_dump(exclude_unset=True)
+    for key in ("title", "notes", "due_date", "priority", "status"):
+        if key in updates:
+            setattr(task, key, updates[key])
+    if "status" in updates:
+        task.completed_at = utc_now_iso() if task.status == "completed" else None
+    task.updated_at = utc_now_iso()
+    db.commit()
+    db.refresh(task)
+    return _task_to_dict(task, project)
+
+
+@router.delete("/projects/{project_id}/planning/tasks/{task_id}", status_code=204)
+@limiter.limit("60/hour")
+def delete_course_task(
+    request: Request,
+    project_id: str,
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_owned_project(db, project_id, current_user)
+    task = db.get(CourseTask, task_id)
+    if not task or task.project_id != project_id or task.user_id != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+    db.delete(task)
+    db.commit()
+    return None
+
+
+@router.get("/planning/calendar", response_model=CalendarAgendaResponse)
+def get_calendar_agenda(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    reference_date: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    today = _parse_reference_date(reference_date)
+    start, end = _calendar_range(start_date, end_date, today)
+    start_value = start.isoformat()
+    end_value = end.isoformat()
+    projects = db.query(Project).filter(Project.user_id == current_user.user_id).all()
+    projects_by_id = {project.id: project for project in projects}
+    if not projects_by_id:
+        return {
+            "items": [],
+            "unscheduled_tasks": [],
+            "start_date": start_value,
+            "end_date": end_value,
+            "reference_date": today.isoformat(),
+            "open_tasks": 0,
+            "overdue_tasks": 0,
+            "upcoming_deadlines": 0,
+        }
+    project_ids = list(projects_by_id)
+    obligations = (
+        db.query(CourseObligation)
+        .filter(
+            CourseObligation.project_id.in_(project_ids),
+            CourseObligation.status == "confirmed",
+        )
+        .all()
+    )
+    obligations_by_id = {item.id: item for item in obligations}
+    items = []
+    for obligation in obligations:
+        if obligation.due_date and start_value <= obligation.due_date <= end_value:
+            project = projects_by_id[obligation.project_id]
+            items.append(
+                {
+                    "id": obligation.id,
+                    "item_type": "deadline",
+                    "project_id": project.id,
+                    "project_title": project.title,
+                    "course_code": project.course_code,
+                    "title": obligation.title,
+                    "date": obligation.due_date,
+                    "status": obligation.status,
+                    "details": obligation.details,
+                    "priority": None,
+                    "estimated_minutes": None,
+                    "obligation_id": obligation.id,
+                }
+            )
+    milestones = db.query(PreparationMilestone).filter(
+        PreparationMilestone.project_id.in_(project_ids),
+        PreparationMilestone.scheduled_date >= start_value,
+        PreparationMilestone.scheduled_date <= end_value,
+    ).all()
+    for milestone in milestones:
+        obligation = obligations_by_id.get(milestone.obligation_id)
+        if obligation is None:
+            continue
+        project = projects_by_id[milestone.project_id]
+        items.append(
+            {
+                "id": milestone.id,
+                "item_type": "preparation_session",
+                "project_id": project.id,
+                "project_title": project.title,
+                "course_code": project.course_code,
+                "title": milestone.title,
+                "date": milestone.scheduled_date,
+                "status": milestone.status,
+                "details": f"Preparing for {obligation.title}",
+                "priority": None,
+                "estimated_minutes": milestone.estimated_minutes,
+                "obligation_id": obligation.id,
+            }
+        )
+    tasks = db.query(CourseTask).filter(
+        CourseTask.user_id == current_user.user_id,
+        CourseTask.project_id.in_(project_ids),
+    ).all()
+    for task in tasks:
+        if task.due_date and start_value <= task.due_date <= end_value:
+            project = projects_by_id[task.project_id]
+            items.append(
+                {
+                    "id": task.id,
+                    "item_type": "task",
+                    "project_id": project.id,
+                    "project_title": project.title,
+                    "course_code": project.course_code,
+                    "title": task.title,
+                    "date": task.due_date,
+                    "status": task.status,
+                    "details": task.notes,
+                    "priority": task.priority,
+                    "estimated_minutes": None,
+                    "obligation_id": None,
+                }
+            )
+    items.sort(key=lambda item: (item["date"], item["item_type"], item["title"].casefold()))
+    open_tasks = [item for item in tasks if item.status == "open"]
+    undated = [item for item in open_tasks if item.due_date is None]
+    undated.sort(key=lambda item: ({"high": 0, "medium": 1, "low": 2}[item.priority], item.created_at))
+    return {
+        "items": items,
+        "unscheduled_tasks": [
+            _task_to_dict(item, projects_by_id[item.project_id]) for item in undated
+        ],
+        "start_date": start_value,
+        "end_date": end_value,
+        "reference_date": today.isoformat(),
+        "open_tasks": len(open_tasks),
+        "overdue_tasks": sum(
+            item.due_date is not None and item.due_date < today.isoformat()
+            for item in open_tasks
+        ),
+        "upcoming_deadlines": sum(
+            item.due_date is not None and item.due_date >= today.isoformat()
+            for item in obligations
+        ),
+    }
 
 
 def _ics_escape(value: str) -> str:

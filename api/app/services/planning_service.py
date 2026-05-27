@@ -182,6 +182,7 @@ def run_syllabus_extraction_in_background(
                     project_id=project_id,
                     source_id=source_id,
                     status="proposed",
+                    proposal_snapshot=dict(proposal),
                     created_at=now,
                     updated_at=now,
                     **proposal,
