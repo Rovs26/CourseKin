@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
+from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -10,7 +11,15 @@ from app.core.auth import CurrentUser, get_current_user, require_owner
 from app.core.rate_limit import limiter
 from app.core.utils import utc_now_iso
 from app.db.database import get_db
-from app.db.models import CourseObligation, CourseTask, Job, PreparationMilestone, Project, Source
+from app.db.models import (
+    CourseObligation,
+    CourseTask,
+    Job,
+    PreparationMilestone,
+    Project,
+    Source,
+    TaskFocusSession,
+)
 from app.schemas.job import JobResponse
 from app.schemas.planning import (
     BuildPreparationPlanRequest,
@@ -29,6 +38,10 @@ from app.schemas.planning import (
     ReminderPreferenceResponse,
     ReminderPreferenceUpdateRequest,
     SyllabusExtractionRequest,
+    TaskFocusSessionResponse,
+    TaskFocusStartRequest,
+    TaskFocusStopRequest,
+    TaskStatsResponse,
 )
 from app.services.generation_guard_service import require_generation_challenge
 from app.services.preparation_service import rebuild_preparation_plan
@@ -122,7 +135,12 @@ def _milestone_to_dict(item: PreparationMilestone) -> dict:
     }
 
 
-def _task_to_dict(item: CourseTask, project: Project) -> dict:
+def _task_to_dict(
+    item: CourseTask,
+    project: Project,
+    subtask_count: int = 0,
+    completed_subtask_count: int = 0,
+) -> dict:
     return {
         "id": item.id,
         "project_id": item.project_id,
@@ -134,6 +152,13 @@ def _task_to_dict(item: CourseTask, project: Project) -> dict:
         "priority": item.priority,
         "status": item.status,
         "origin": item.origin,
+        "parent_task_id": item.parent_task_id,
+        "tags": item.tags or [],
+        "recurrence_rule": item.recurrence_rule,
+        "recurrence_parent_id": item.recurrence_parent_id,
+        "focus_seconds_total": item.focus_seconds_total or 0,
+        "subtask_count": subtask_count,
+        "completed_subtask_count": completed_subtask_count,
         "completed_at": item.completed_at,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
@@ -145,6 +170,45 @@ def _parse_reference_date(value: str | None) -> date:
         return date.fromisoformat(value) if value else date.today()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Planning date must use YYYY-MM-DD format") from exc
+
+
+def _advance_due_date(current: str | None, rule: str | None) -> str | None:
+    """Return the next due_date for a recurring task. Falls back to today + step if no current date."""
+    if not rule:
+        return None
+    today = date.today()
+    base = today
+    if current:
+        try:
+            base = date.fromisoformat(current)
+        except ValueError:
+            base = today
+    if rule == "daily":
+        step = timedelta(days=1)
+    elif rule == "weekly":
+        step = timedelta(days=7)
+    elif rule == "biweekly":
+        step = timedelta(days=14)
+    elif rule == "monthly":
+        # Approximate one calendar month forward.
+        month = base.month + 1
+        year = base.year + (1 if month > 12 else 0)
+        month = ((month - 1) % 12) + 1
+        try:
+            return base.replace(year=year, month=month).isoformat()
+        except ValueError:
+            # Day-of-month doesn't exist in target month (e.g. Jan 31 -> Feb). Clamp to month end.
+            from calendar import monthrange
+
+            last_day = monthrange(year, month)[1]
+            return base.replace(year=year, month=month, day=min(base.day, last_day)).isoformat()
+    else:
+        return None
+    nxt = base + step
+    # Make sure spawn is in the future relative to today.
+    while nxt <= today:
+        nxt = nxt + step
+    return nxt.isoformat()
 
 
 def _calendar_range(
@@ -569,6 +633,7 @@ def list_preparation_reminders(
 @router.get("/planning/tasks", response_model=CourseTaskListResponse)
 def list_course_tasks(
     include_completed: bool = False,
+    tag: str | None = None,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
@@ -583,6 +648,21 @@ def list_course_tasks(
     if not include_completed:
         query = query.filter(CourseTask.status == "open")
     tasks = query.all()
+
+    if tag:
+        tag_norm = tag.strip().lower()
+        tasks = [t for t in tasks if t.tags and tag_norm in t.tags]
+
+    # Build subtask counts by parent.
+    subtask_open: dict[str, int] = {}
+    subtask_done: dict[str, int] = {}
+    for t in tasks:
+        if t.parent_task_id:
+            if t.status == "completed":
+                subtask_done[t.parent_task_id] = subtask_done.get(t.parent_task_id, 0) + 1
+            else:
+                subtask_open[t.parent_task_id] = subtask_open.get(t.parent_task_id, 0) + 1
+
     tasks.sort(
         key=lambda item: (
             item.status == "completed",
@@ -593,7 +673,15 @@ def list_course_tasks(
         )
     )
     return {
-        "items": [_task_to_dict(item, projects_by_id[item.project_id]) for item in tasks],
+        "items": [
+            _task_to_dict(
+                item,
+                projects_by_id[item.project_id],
+                subtask_count=subtask_open.get(item.id, 0) + subtask_done.get(item.id, 0),
+                completed_subtask_count=subtask_done.get(item.id, 0),
+            )
+            for item in tasks
+        ],
         "total": len(tasks),
     }
 
@@ -611,17 +699,34 @@ def create_course_task(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     project = _require_owned_project(db, project_id, current_user)
+    if payload.parent_task_id:
+        parent = db.get(CourseTask, payload.parent_task_id)
+        if (
+            not parent
+            or parent.project_id != project_id
+            or parent.user_id != current_user.user_id
+        ):
+            raise HTTPException(status_code=404, detail="Parent task not found")
+        if parent.parent_task_id is not None:
+            raise HTTPException(
+                status_code=422, detail="Subtasks cannot be nested deeper than one level"
+            )
     now = utc_now_iso()
     task = CourseTask(
         id=str(uuid4()),
         user_id=current_user.user_id,
         project_id=project_id,
+        parent_task_id=payload.parent_task_id,
         title=payload.title,
         notes=payload.notes,
         due_date=payload.due_date,
         priority=payload.priority,
         status="open",
         origin="student",
+        tags=payload.tags,
+        recurrence_rule=payload.recurrence_rule,
+        recurrence_parent_id=None,
+        focus_seconds_total=0,
         completed_at=None,
         created_at=now,
         updated_at=now,
@@ -650,12 +755,69 @@ def update_course_task(
     if not task or task.project_id != project_id or task.user_id != current_user.user_id:
         raise HTTPException(status_code=404, detail="Task not found")
     updates = payload.model_dump(exclude_unset=True)
-    for key in ("title", "notes", "due_date", "priority", "status"):
+    previously_open = task.status != "completed"
+    if "parent_task_id" in updates:
+        new_parent_id = updates["parent_task_id"]
+        if new_parent_id is not None:
+            parent = db.get(CourseTask, new_parent_id)
+            if (
+                not parent
+                or parent.project_id != project_id
+                or parent.user_id != current_user.user_id
+            ):
+                raise HTTPException(status_code=404, detail="Parent task not found")
+            if parent.id == task.id:
+                raise HTTPException(status_code=422, detail="A task cannot be its own parent")
+            if parent.parent_task_id is not None:
+                raise HTTPException(
+                    status_code=422, detail="Subtasks cannot be nested deeper than one level"
+                )
+        task.parent_task_id = new_parent_id
+    for key in (
+        "title",
+        "notes",
+        "due_date",
+        "priority",
+        "status",
+        "tags",
+        "recurrence_rule",
+    ):
         if key in updates:
             setattr(task, key, updates[key])
     if "status" in updates:
         task.completed_at = utc_now_iso() if task.status == "completed" else None
     task.updated_at = utc_now_iso()
+
+    # If task just got marked complete and has a recurrence rule, spawn the next instance.
+    if (
+        previously_open
+        and task.status == "completed"
+        and task.recurrence_rule
+        and task.parent_task_id is None
+    ):
+        next_due = _advance_due_date(task.due_date, task.recurrence_rule)
+        if next_due:
+            spawn = CourseTask(
+                id=str(uuid4()),
+                user_id=task.user_id,
+                project_id=task.project_id,
+                parent_task_id=None,
+                title=task.title,
+                notes=task.notes,
+                due_date=next_due,
+                priority=task.priority,
+                status="open",
+                origin=task.origin,
+                tags=task.tags,
+                recurrence_rule=task.recurrence_rule,
+                recurrence_parent_id=task.recurrence_parent_id or task.id,
+                focus_seconds_total=0,
+                completed_at=None,
+                created_at=utc_now_iso(),
+                updated_at=utc_now_iso(),
+            )
+            db.add(spawn)
+
     db.commit()
     db.refresh(task)
     return _task_to_dict(task, project)
@@ -674,6 +836,15 @@ def delete_course_task(
     task = db.get(CourseTask, task_id)
     if not task or task.project_id != project_id or task.user_id != current_user.user_id:
         raise HTTPException(status_code=404, detail="Task not found")
+    # Cascade-delete subtasks.
+    db.query(CourseTask).filter(
+        CourseTask.parent_task_id == task.id,
+        CourseTask.user_id == current_user.user_id,
+    ).delete(synchronize_session=False)
+    # Clean up any focus sessions for this task.
+    db.query(TaskFocusSession).filter(TaskFocusSession.task_id == task.id).delete(
+        synchronize_session=False
+    )
     db.delete(task)
     db.commit()
     return None
@@ -855,3 +1026,307 @@ def export_confirmed_obligations_calendar(
         media_type="text/calendar",
         headers={"Content-Disposition": f'attachment; filename="{safe_title or "course"}-deadlines.ics"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Tier 1 task add-ons: focus sessions and stats
+# ---------------------------------------------------------------------------
+
+
+def _focus_to_dict(session: TaskFocusSession) -> dict:
+    return {
+        "id": session.id,
+        "task_id": session.task_id,
+        "project_id": session.project_id,
+        "started_at": session.started_at,
+        "ended_at": session.ended_at,
+        "duration_seconds": session.duration_seconds,
+        "notes": session.notes,
+    }
+
+
+@router.post(
+    "/projects/{project_id}/planning/tasks/{task_id}/focus/start",
+    response_model=TaskFocusSessionResponse,
+)
+@limiter.limit("60/hour")
+def start_focus_session(
+    request: Request,
+    project_id: str,
+    task_id: str,
+    payload: TaskFocusStartRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_owned_project(db, project_id, current_user)
+    task = db.get(CourseTask, task_id)
+    if not task or task.project_id != project_id or task.user_id != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Close any open session for this user before starting a new one.
+    open_sessions = (
+        db.query(TaskFocusSession)
+        .filter(
+            TaskFocusSession.user_id == current_user.user_id,
+            TaskFocusSession.ended_at.is_(None),
+        )
+        .all()
+    )
+    now_iso = utc_now_iso()
+    for s in open_sessions:
+        s.ended_at = now_iso
+        try:
+            elapsed = int(
+                (
+                    datetime.fromisoformat(now_iso.replace("Z", "+00:00"))
+                    - datetime.fromisoformat(s.started_at.replace("Z", "+00:00"))
+                ).total_seconds()
+            )
+        except ValueError:
+            elapsed = 0
+        s.duration_seconds = max(0, elapsed)
+        prior_task = db.get(CourseTask, s.task_id)
+        if prior_task:
+            prior_task.focus_seconds_total = (prior_task.focus_seconds_total or 0) + s.duration_seconds
+            prior_task.updated_at = now_iso
+
+    session = TaskFocusSession(
+        id=str(uuid4()),
+        task_id=task.id,
+        user_id=current_user.user_id,
+        project_id=project_id,
+        started_at=now_iso,
+        ended_at=None,
+        duration_seconds=None,
+        notes=payload.notes,
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return _focus_to_dict(session)
+
+
+@router.post(
+    "/projects/{project_id}/planning/tasks/{task_id}/focus/stop",
+    response_model=TaskFocusSessionResponse,
+)
+@limiter.limit("60/hour")
+def stop_focus_session(
+    request: Request,
+    project_id: str,
+    task_id: str,
+    payload: TaskFocusStopRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_owned_project(db, project_id, current_user)
+    task = db.get(CourseTask, task_id)
+    if not task or task.project_id != project_id or task.user_id != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    session = (
+        db.query(TaskFocusSession)
+        .filter(
+            TaskFocusSession.task_id == task.id,
+            TaskFocusSession.user_id == current_user.user_id,
+            TaskFocusSession.ended_at.is_(None),
+        )
+        .order_by(TaskFocusSession.started_at.desc())
+        .first()
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="No active focus session for this task")
+
+    now_iso = utc_now_iso()
+    try:
+        elapsed = int(
+            (
+                datetime.fromisoformat(now_iso.replace("Z", "+00:00"))
+                - datetime.fromisoformat(session.started_at.replace("Z", "+00:00"))
+            ).total_seconds()
+        )
+    except ValueError:
+        elapsed = 0
+    session.ended_at = now_iso
+    session.duration_seconds = max(0, elapsed)
+    if payload.notes:
+        session.notes = payload.notes
+
+    task.focus_seconds_total = (task.focus_seconds_total or 0) + session.duration_seconds
+    task.updated_at = now_iso
+
+    db.commit()
+    db.refresh(session)
+    return _focus_to_dict(session)
+
+
+@router.get("/planning/tasks/active-focus", response_model=Optional[TaskFocusSessionResponse])
+def get_active_focus_session(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    session = (
+        db.query(TaskFocusSession)
+        .filter(
+            TaskFocusSession.user_id == current_user.user_id,
+            TaskFocusSession.ended_at.is_(None),
+        )
+        .order_by(TaskFocusSession.started_at.desc())
+        .first()
+    )
+    if not session:
+        return None
+    return _focus_to_dict(session)
+
+
+@router.get("/planning/stats", response_model=TaskStatsResponse)
+def get_task_stats(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    projects = db.query(Project).filter(Project.user_id == current_user.user_id).all()
+    project_ids = [p.id for p in projects]
+    if not project_ids:
+        return {
+            "total": 0,
+            "open": 0,
+            "completed": 0,
+            "overdue": 0,
+            "due_today": 0,
+            "due_this_week": 0,
+            "completion_rate_percent": 0,
+            "completed_last_7d": 0,
+            "completed_last_30d": 0,
+            "focus_seconds_last_7d": 0,
+            "focus_seconds_total": 0,
+            "streak": {
+                "current_streak_days": 0,
+                "longest_streak_days": 0,
+                "last_completion_date": None,
+                "completion_dates_30d": [],
+            },
+            "tag_counts": [],
+        }
+
+    tasks = (
+        db.query(CourseTask)
+        .filter(
+            CourseTask.user_id == current_user.user_id,
+            CourseTask.project_id.in_(project_ids),
+        )
+        .all()
+    )
+
+    today = date.today()
+    week_end = today + timedelta(days=6)
+    open_count = sum(1 for t in tasks if t.status == "open")
+    completed_count = sum(1 for t in tasks if t.status == "completed")
+    overdue = sum(
+        1
+        for t in tasks
+        if t.status == "open"
+        and t.due_date
+        and t.due_date < today.isoformat()
+    )
+    due_today = sum(
+        1 for t in tasks if t.status == "open" and t.due_date == today.isoformat()
+    )
+    due_this_week = sum(
+        1
+        for t in tasks
+        if t.status == "open"
+        and t.due_date
+        and today.isoformat() <= t.due_date <= week_end.isoformat()
+    )
+    completion_rate = (
+        round((completed_count / len(tasks)) * 100) if tasks else 0
+    )
+
+    completion_dates: list[str] = []
+    for t in tasks:
+        if t.status == "completed" and t.completed_at:
+            completion_dates.append(t.completed_at[:10])
+
+    cutoff_7 = (today - timedelta(days=6)).isoformat()
+    cutoff_30 = (today - timedelta(days=29)).isoformat()
+    completed_last_7d = sum(1 for d in completion_dates if d >= cutoff_7)
+    completed_last_30d = sum(1 for d in completion_dates if d >= cutoff_30)
+    dates_30d = sorted({d for d in completion_dates if d >= cutoff_30})
+
+    # Streak calculation: count consecutive days ending today (or yesterday) with at least one completion.
+    completion_set = set(completion_dates)
+    current_streak = 0
+    cursor = today
+    if today.isoformat() not in completion_set:
+        cursor = today - timedelta(days=1)
+    while cursor.isoformat() in completion_set:
+        current_streak += 1
+        cursor = cursor - timedelta(days=1)
+
+    # Longest streak in last 365 days.
+    longest = 0
+    if completion_dates:
+        oldest_iso = min(completion_dates)
+        try:
+            oldest_d = date.fromisoformat(oldest_iso)
+        except ValueError:
+            oldest_d = today
+        if (today - oldest_d).days > 365:
+            oldest_d = today - timedelta(days=365)
+        run = 0
+        cursor = oldest_d
+        while cursor <= today:
+            if cursor.isoformat() in completion_set:
+                run += 1
+                longest = max(longest, run)
+            else:
+                run = 0
+            cursor = cursor + timedelta(days=1)
+
+    last_completion = max(completion_dates) if completion_dates else None
+
+    # Focus stats.
+    focus_total = sum((t.focus_seconds_total or 0) for t in tasks)
+    sessions_7d = (
+        db.query(TaskFocusSession)
+        .filter(
+            TaskFocusSession.user_id == current_user.user_id,
+            TaskFocusSession.started_at >= cutoff_7,
+            TaskFocusSession.duration_seconds.isnot(None),
+        )
+        .all()
+    )
+    focus_7d = sum((s.duration_seconds or 0) for s in sessions_7d)
+
+    # Tag counts (open tasks only — what students would filter on).
+    tag_counter: dict[str, int] = {}
+    for t in tasks:
+        if t.status != "open" or not t.tags:
+            continue
+        for tg in t.tags:
+            tag_counter[tg] = tag_counter.get(tg, 0) + 1
+    tag_counts = [
+        {"tag": tag, "count": count}
+        for tag, count in sorted(tag_counter.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
+
+    return {
+        "total": len(tasks),
+        "open": open_count,
+        "completed": completed_count,
+        "overdue": overdue,
+        "due_today": due_today,
+        "due_this_week": due_this_week,
+        "completion_rate_percent": completion_rate,
+        "completed_last_7d": completed_last_7d,
+        "completed_last_30d": completed_last_30d,
+        "focus_seconds_last_7d": focus_7d,
+        "focus_seconds_total": focus_total,
+        "streak": {
+            "current_streak_days": current_streak,
+            "longest_streak_days": longest,
+            "last_completion_date": last_completion,
+            "completion_dates_30d": dates_30d,
+        },
+        "tag_counts": tag_counts,
+    }

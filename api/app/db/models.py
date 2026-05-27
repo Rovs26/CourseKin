@@ -170,15 +170,33 @@ class CourseTask(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    parent_task_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     title: Mapped[str] = mapped_column(String, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     due_date: Mapped[str | None] = mapped_column(String, nullable=True)
     priority: Mapped[str] = mapped_column(String, nullable=False, default="medium")
     status: Mapped[str] = mapped_column(String, nullable=False, default="open")
     origin: Mapped[str] = mapped_column(String, nullable=False, default="student")
+    tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    recurrence_rule: Mapped[str | None] = mapped_column(String, nullable=True)
+    recurrence_parent_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    focus_seconds_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completed_at: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class TaskFocusSession(Base):
+    __tablename__ = "task_focus_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    task_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String, nullable=False)
+    started_at: Mapped[str] = mapped_column(String, nullable=False)
+    ended_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class CourseStreamEntry(Base):

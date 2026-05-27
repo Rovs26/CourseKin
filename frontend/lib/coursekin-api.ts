@@ -230,6 +230,8 @@ export type PreparationReminder = {
 export type CourseTaskPriority = "low" | "medium" | "high";
 export type CourseTaskStatus = "open" | "completed";
 
+export type TaskRecurrenceRule = "daily" | "weekly" | "biweekly" | "monthly";
+
 export type CourseTask = {
   id: string;
   project_id: string;
@@ -241,9 +243,49 @@ export type CourseTask = {
   priority: CourseTaskPriority;
   status: CourseTaskStatus;
   origin: "student";
+  parent_task_id: string | null;
+  tags: string[];
+  recurrence_rule: TaskRecurrenceRule | null;
+  recurrence_parent_id: string | null;
+  focus_seconds_total: number;
+  subtask_count: number;
+  completed_subtask_count: number;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type TaskFocusSession = {
+  id: string;
+  task_id: string;
+  project_id: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  notes: string | null;
+};
+
+export type TaskStreak = {
+  current_streak_days: number;
+  longest_streak_days: number;
+  last_completion_date: string | null;
+  completion_dates_30d: string[];
+};
+
+export type TaskStats = {
+  total: number;
+  open: number;
+  completed: number;
+  overdue: number;
+  due_today: number;
+  due_this_week: number;
+  completion_rate_percent: number;
+  completed_last_7d: number;
+  completed_last_30d: number;
+  focus_seconds_last_7d: number;
+  focus_seconds_total: number;
+  streak: TaskStreak;
+  tag_counts: Array<{ tag: string; count: number }>;
 };
 
 export type CalendarAgendaItem = {
@@ -692,9 +734,11 @@ export function listPreparationReminders() {
   );
 }
 
-export function listCourseTasks(includeCompleted = true) {
+export function listCourseTasks(includeCompleted = true, tag?: string) {
+  const params = new URLSearchParams({ include_completed: String(includeCompleted) });
+  if (tag) params.set("tag", tag);
   return apiRequest<{ items: CourseTask[]; total: number }>(
-    `/planning/tasks?include_completed=${includeCompleted}`,
+    `/planning/tasks?${params.toString()}`,
     { method: "GET" }
   );
 }
@@ -706,6 +750,9 @@ export function createCourseTask(
     notes?: string;
     due_date?: string;
     priority: CourseTaskPriority;
+    parent_task_id?: string | null;
+    tags?: string[];
+    recurrence_rule?: TaskRecurrenceRule | null;
   }
 ) {
   return apiRequest<CourseTask>(`/projects/${projectId}/planning/tasks`, {
@@ -723,6 +770,9 @@ export function updateCourseTask(
     due_date: string | null;
     priority: CourseTaskPriority;
     status: CourseTaskStatus;
+    parent_task_id: string | null;
+    tags: string[];
+    recurrence_rule: TaskRecurrenceRule | null;
   }>
 ) {
   return apiRequest<CourseTask>(`/projects/${projectId}/planning/tasks/${taskId}`, {
@@ -734,6 +784,38 @@ export function updateCourseTask(
 export function deleteCourseTask(projectId: string, taskId: string) {
   return apiRequest<void>(`/projects/${projectId}/planning/tasks/${taskId}`, {
     method: "DELETE",
+  });
+}
+
+export function startTaskFocus(projectId: string, taskId: string, notes?: string) {
+  return apiRequest<TaskFocusSession>(
+    `/projects/${projectId}/planning/tasks/${taskId}/focus/start`,
+    {
+      method: "POST",
+      body: JSON.stringify({ notes: notes ?? null }),
+    }
+  );
+}
+
+export function stopTaskFocus(projectId: string, taskId: string, notes?: string) {
+  return apiRequest<TaskFocusSession>(
+    `/projects/${projectId}/planning/tasks/${taskId}/focus/stop`,
+    {
+      method: "POST",
+      body: JSON.stringify({ notes: notes ?? null }),
+    }
+  );
+}
+
+export function getActiveTaskFocus() {
+  return apiRequest<TaskFocusSession | null>(`/planning/tasks/active-focus`, {
+    method: "GET",
+  });
+}
+
+export function getTaskStats() {
+  return apiRequest<TaskStats>(`/planning/stats`, {
+    method: "GET",
   });
 }
 

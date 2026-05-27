@@ -164,11 +164,52 @@ class PreparationReminderListResponse(BaseModel):
     reference_date: str
 
 
+VALID_RECURRENCE = {"daily", "weekly", "biweekly", "monthly"}
+
+
+def _validate_tags(value: Optional[list]) -> Optional[list[str]]:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValueError("Tags must be a list")
+    if len(value) > 10:
+        raise ValueError("Tasks support up to 10 tags")
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for tag in value:
+        if not isinstance(tag, str):
+            raise ValueError("Each tag must be a string")
+        normalized = tag.strip().lower()
+        if not normalized:
+            continue
+        if len(normalized) > 30:
+            raise ValueError("Each tag must be 30 characters or fewer")
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        cleaned.append(normalized)
+    return cleaned or None
+
+
+def _validate_recurrence(value: Optional[str]) -> Optional[str]:
+    if value is None or not value.strip():
+        return None
+    normalized = value.strip().lower()
+    if normalized not in VALID_RECURRENCE:
+        raise ValueError(
+            f"Recurrence must be one of {sorted(VALID_RECURRENCE)}"
+        )
+    return normalized
+
+
 class CourseTaskCreateRequest(BaseModel):
     title: str
     notes: Optional[str] = None
     due_date: Optional[str] = None
     priority: TaskPriority = "medium"
+    parent_task_id: Optional[str] = None
+    tags: Optional[list[str]] = None
+    recurrence_rule: Optional[str] = None
 
     @field_validator("title")
     @classmethod
@@ -198,6 +239,16 @@ class CourseTaskCreateRequest(BaseModel):
         date.fromisoformat(value)
         return value
 
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, value):
+        return _validate_tags(value)
+
+    @field_validator("recurrence_rule")
+    @classmethod
+    def validate_recurrence(cls, value):
+        return _validate_recurrence(value)
+
 
 class CourseTaskUpdateRequest(BaseModel):
     title: Optional[str] = None
@@ -205,6 +256,9 @@ class CourseTaskUpdateRequest(BaseModel):
     due_date: Optional[str] = None
     priority: Optional[TaskPriority] = None
     status: Optional[TaskStatus] = None
+    parent_task_id: Optional[str] = None
+    tags: Optional[list[str]] = None
+    recurrence_rule: Optional[str] = None
 
     @field_validator("title")
     @classmethod
@@ -236,6 +290,16 @@ class CourseTaskUpdateRequest(BaseModel):
         date.fromisoformat(value)
         return value
 
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, value):
+        return _validate_tags(value)
+
+    @field_validator("recurrence_rule")
+    @classmethod
+    def validate_recurrence(cls, value):
+        return _validate_recurrence(value)
+
 
 class CourseTaskResponse(BaseModel):
     id: str
@@ -248,6 +312,13 @@ class CourseTaskResponse(BaseModel):
     priority: TaskPriority
     status: TaskStatus
     origin: Literal["student"]
+    parent_task_id: Optional[str] = None
+    tags: list[str] = []
+    recurrence_rule: Optional[str] = None
+    recurrence_parent_id: Optional[str] = None
+    focus_seconds_total: int = 0
+    subtask_count: int = 0
+    completed_subtask_count: int = 0
     completed_at: Optional[str] = None
     created_at: str
     updated_at: str
@@ -256,6 +327,67 @@ class CourseTaskResponse(BaseModel):
 class CourseTaskListResponse(BaseModel):
     items: list[CourseTaskResponse]
     total: int
+
+
+class TaskFocusSessionResponse(BaseModel):
+    id: str
+    task_id: str
+    project_id: str
+    started_at: str
+    ended_at: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class TaskFocusStartRequest(BaseModel):
+    notes: Optional[str] = None
+
+    @field_validator("notes")
+    @classmethod
+    def validate_notes(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) > 500:
+            raise ValueError("Focus notes must be 500 characters or fewer")
+        return value or None
+
+
+class TaskFocusStopRequest(BaseModel):
+    notes: Optional[str] = None
+
+    @field_validator("notes")
+    @classmethod
+    def validate_notes(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip()
+        if len(value) > 500:
+            raise ValueError("Focus notes must be 500 characters or fewer")
+        return value or None
+
+
+class TaskStreakResponse(BaseModel):
+    current_streak_days: int
+    longest_streak_days: int
+    last_completion_date: Optional[str] = None
+    completion_dates_30d: list[str] = []
+
+
+class TaskStatsResponse(BaseModel):
+    total: int
+    open: int
+    completed: int
+    overdue: int
+    due_today: int
+    due_this_week: int
+    completion_rate_percent: int
+    completed_last_7d: int
+    completed_last_30d: int
+    focus_seconds_last_7d: int
+    focus_seconds_total: int
+    streak: TaskStreakResponse
+    tag_counts: list[dict] = []
 
 
 class CalendarAgendaItemResponse(BaseModel):
