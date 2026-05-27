@@ -42,8 +42,15 @@ from app.schemas.planning import (
     TaskFocusStartRequest,
     TaskFocusStopRequest,
     TaskStatsResponse,
+    ObligationTopicsUpdateRequest,
+    ObligationReadinessResponse,
+    ProjectCoverageResponse,
 )
 from app.services.generation_guard_service import require_generation_challenge
+from app.services.coverage_service import (
+    compute_obligation_readiness,
+    compute_project_coverage,
+)
 from app.services.preparation_service import rebuild_preparation_plan
 from app.services.usage_service import (
     check_daily_cap,
@@ -75,6 +82,7 @@ def _obligation_to_dict(item: CourseObligation) -> dict:
         "grading_criteria": item.grading_criteria,
         "confidence": item.confidence,
         "uncertain_fields": item.uncertain_fields or [],
+        "topics": item.topics or [],
         "status": item.status,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
@@ -1330,3 +1338,71 @@ def get_task_stats(
         },
         "tag_counts": tag_counts,
     }
+
+
+# ---------------------------------------------------------------------------
+# Coverage / topic readiness mapping
+# ---------------------------------------------------------------------------
+
+
+@router.put(
+    "/projects/{project_id}/planning/obligations/{obligation_id}/topics",
+    response_model=CourseObligationResponse,
+)
+@limiter.limit("60/hour")
+def update_obligation_topics(
+    request: Request,
+    project_id: str,
+    obligation_id: str,
+    payload: ObligationTopicsUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Replace the topics list on an obligation. Topics are used by the
+    readiness endpoint to roll up quiz performance against this deadline."""
+    _require_owned_project(db, project_id, current_user)
+    obligation = db.get(CourseObligation, obligation_id)
+    if not obligation or obligation.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Obligation not found")
+    obligation.topics = payload.topics or None
+    obligation.updated_at = utc_now_iso()
+    db.commit()
+    db.refresh(obligation)
+    return _obligation_to_dict(obligation)
+
+
+@router.get(
+    "/projects/{project_id}/planning/obligations/{obligation_id}/readiness",
+    response_model=ObligationReadinessResponse,
+)
+def get_obligation_readiness(
+    project_id: str,
+    obligation_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Per-topic readiness for one obligation, weighted by recent quiz
+    history (14-day half-life, 90-day lookback)."""
+    _require_owned_project(db, project_id, current_user)
+    obligation = db.get(CourseObligation, obligation_id)
+    if not obligation or obligation.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Obligation not found")
+    return compute_obligation_readiness(
+        db, obligation=obligation, user_id=current_user.user_id
+    )
+
+
+@router.get(
+    "/projects/{project_id}/planning/coverage",
+    response_model=ProjectCoverageResponse,
+)
+def get_project_coverage(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Aggregate coverage across upcoming confirmed obligations in the project."""
+    _require_owned_project(db, project_id, current_user)
+    return compute_project_coverage(
+        db, project_id=project_id, user_id=current_user.user_id
+    )

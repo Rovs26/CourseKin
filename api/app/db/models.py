@@ -140,6 +140,7 @@ class CourseObligation(Base):
     confidence: Mapped[str] = mapped_column(String, nullable=False)
     uncertain_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
+    topics: Mapped[list | None] = mapped_column(JSON, nullable=True)
     proposal_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     reviewed_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     reviewed_at: Mapped[str | None] = mapped_column(String, nullable=True)

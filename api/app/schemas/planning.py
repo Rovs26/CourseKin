@@ -12,6 +12,69 @@ TaskPriority = Literal["low", "medium", "high"]
 TaskStatus = Literal["open", "completed"]
 
 
+class ObligationTopicsUpdateRequest(BaseModel):
+    topics: list[str]
+
+    @field_validator("topics")
+    @classmethod
+    def validate_topics(cls, value: list[str]) -> list[str]:
+        if not isinstance(value, list):
+            raise ValueError("Topics must be a list of strings")
+        if len(value) > 30:
+            raise ValueError("Each obligation supports up to 30 topics")
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            if not isinstance(raw, str):
+                raise ValueError("Each topic must be a string")
+            t = raw.strip().lower()
+            if not t:
+                continue
+            if len(t) > 80:
+                raise ValueError("Each topic must be 80 characters or fewer")
+            if t in seen:
+                continue
+            seen.add(t)
+            cleaned.append(t)
+        return cleaned
+
+
+class CoverageTopicRow(BaseModel):
+    topic: str
+    attempts_weighted: float
+    correct_weighted: float
+    readiness_percent: Optional[int] = None
+    cards_due: int
+    cards_total: int
+    coverage: Literal["untested", "weak", "developing", "strong"]
+
+
+class ObligationReadinessResponse(BaseModel):
+    obligation_id: str
+    topics: list[CoverageTopicRow]
+    overall_readiness_percent: Optional[int] = None
+    topics_total: int
+    topics_untested: int
+
+
+class ObligationCoverageRow(BaseModel):
+    obligation_id: str
+    title: str
+    due_date: Optional[str] = None
+    topics_total: int
+    topics_untested: int
+    overall_readiness_percent: Optional[int] = None
+
+
+class ProjectCoverageResponse(BaseModel):
+    project_id: str
+    obligations: list[ObligationCoverageRow]
+    project_readiness_percent: Optional[int] = None
+    topics_total: int
+    topics_untested: int
+    obligations_count: int
+
+
 class SyllabusExtractionRequest(BaseModel):
     source_id: str
     turnstile_token: Optional[str] = None
@@ -28,6 +91,7 @@ class CourseObligationResponse(BaseModel):
     grading_criteria: Optional[str] = None
     confidence: Confidence
     uncertain_fields: list[str] = Field(default_factory=list)
+    topics: list[str] = Field(default_factory=list)
     status: ObligationStatus
     created_at: str
     updated_at: str

@@ -161,6 +161,7 @@ export type CourseObligation = {
   grading_criteria: string | null;
   confidence: "high" | "medium" | "low";
   uncertain_fields: string[];
+  topics: string[];
   status: ObligationStatus;
   created_at: string;
   updated_at: string;
@@ -817,6 +818,72 @@ export function getTaskStats() {
   return apiRequest<TaskStats>(`/planning/stats`, {
     method: "GET",
   });
+}
+
+// ─── Coverage / topic readiness mapping ──────────────────────────────
+
+export type CoverageBucket = "untested" | "weak" | "developing" | "strong";
+
+export type CoverageTopicRow = {
+  topic: string;
+  attempts_weighted: number;
+  correct_weighted: number;
+  readiness_percent: number | null;
+  cards_due: number;
+  cards_total: number;
+  coverage: CoverageBucket;
+};
+
+export type ObligationReadiness = {
+  obligation_id: string;
+  topics: CoverageTopicRow[];
+  overall_readiness_percent: number | null;
+  topics_total: number;
+  topics_untested: number;
+};
+
+export type ProjectCoverage = {
+  project_id: string;
+  obligations: Array<{
+    obligation_id: string;
+    title: string;
+    due_date: string | null;
+    topics_total: number;
+    topics_untested: number;
+    overall_readiness_percent: number | null;
+  }>;
+  project_readiness_percent: number | null;
+  topics_total: number;
+  topics_untested: number;
+  obligations_count: number;
+};
+
+export function updateObligationTopics(
+  projectId: string,
+  obligationId: string,
+  topics: string[]
+) {
+  return apiRequest<CourseObligation>(
+    `/projects/${projectId}/planning/obligations/${obligationId}/topics`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ topics }),
+    }
+  );
+}
+
+export function getObligationReadiness(projectId: string, obligationId: string) {
+  return apiRequest<ObligationReadiness>(
+    `/projects/${projectId}/planning/obligations/${obligationId}/readiness`,
+    { method: "GET" }
+  );
+}
+
+export function getProjectCoverage(projectId: string) {
+  return apiRequest<ProjectCoverage>(
+    `/projects/${projectId}/planning/coverage`,
+    { method: "GET" }
+  );
 }
 
 // ─── Notebook (study cards + spaced repetition) ──────────────────────
