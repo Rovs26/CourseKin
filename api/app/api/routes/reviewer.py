@@ -25,6 +25,7 @@ from app.schemas.reviewer import (
     QuizPracticeSummaryResponse,
 )
 from app.services.generation_guard_service import require_generation_challenge
+from app.services.notebook_service import seed_remedial_cards_from_quiz_results
 from app.services.usage_service import (
     check_daily_cap,
     check_monthly_quota,
@@ -302,6 +303,22 @@ def record_quiz_attempt(
     db.add(attempt)
     db.commit()
     db.refresh(attempt)
+
+    # Seed remedial notebook cards for any missed questions. Best-effort —
+    # failures here must not break the quiz submission flow.
+    try:
+        seeded = seed_remedial_cards_from_quiz_results(
+            db,
+            user_id=current_user.user_id,
+            project_id=project_id,
+            results=results,
+        )
+        if seeded:
+            db.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to seed remedial notebook cards from quiz attempt")
+        db.rollback()
+
     return _quiz_attempt_to_dict(attempt)
 
 

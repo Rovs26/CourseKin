@@ -846,6 +846,13 @@ export type NotebookCard = {
   updated_at: string;
 };
 
+export function getNotebookReviewQueue(limit = 50) {
+  return apiRequest<{ items: NotebookCard[]; total: number; due_now: number }>(
+    `/notebook/review-queue?limit=${limit}`,
+    { method: "GET" }
+  );
+}
+
 export function listNotebookCards(
   projectId: string,
   options: { onlyDue?: boolean; tag?: string } = {}

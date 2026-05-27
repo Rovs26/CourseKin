@@ -76,6 +76,52 @@ def _apply_sm2(card: NotebookCard, quality: int) -> None:
     card.last_quality = quality
 
 
+@router.get("/notebook/review-queue", response_model=NotebookCardListResponse)
+def get_global_review_queue(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Cards due today (or overdue) across all of the user's projects.
+    Used by the dashboard "Daily Review" surface so students do not have to
+    drill into each course to find what to study."""
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
+    today_iso = date.today().isoformat()
+    project_ids = [
+        row.id
+        for row in db.query(Project.id)
+        .filter(Project.user_id == current_user.user_id)
+        .all()
+    ]
+    if not project_ids:
+        return {"items": [], "total": 0, "due_now": 0}
+    cards = (
+        db.query(NotebookCard)
+        .filter(
+            NotebookCard.user_id == current_user.user_id,
+            NotebookCard.project_id.in_(project_ids),
+        )
+        .all()
+    )
+    due_now = sum(
+        1 for c in cards if c.due_date is None or c.due_date <= today_iso
+    )
+    due_cards = [c for c in cards if c.due_date is None or c.due_date <= today_iso]
+    due_cards.sort(
+        key=lambda c: (
+            c.due_date or "0000-00-00",
+            c.created_at,
+        )
+    )
+    due_cards = due_cards[:limit]
+    return {
+        "items": [_card_to_dict(c) for c in due_cards],
+        "total": len(due_cards),
+        "due_now": due_now,
+    }
+
+
 @router.get(
     "/projects/{project_id}/notebook/cards",
     response_model=NotebookCardListResponse,
