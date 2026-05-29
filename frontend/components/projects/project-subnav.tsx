@@ -9,7 +9,8 @@ const items = [
   { key: "stream", label: "Room", href: (id: string) => `/projects/${id}/stream` },
   { key: "planning", label: "Plan", href: (id: string) => `/projects/${id}/planning` },
   { key: "sources", label: "Materials", href: (id: string) => `/projects/${id}/sources` },
-  { key: "reviewer", label: "Notebook", href: (id: string) => `/projects/${id}/reviewer` },
+  { key: "reviewer", label: "Reviewer", href: (id: string) => `/projects/${id}/reviewer` },
+  { key: "notebook", label: "Notebook", href: (id: string) => `/projects/${id}/notebook` },
   { key: "settings", label: "Settings", href: (id: string) => `/projects/${id}/settings` },
 ];
 

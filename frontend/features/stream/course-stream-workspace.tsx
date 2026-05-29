@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, BookOpenCheck, CheckCircle2, CircleAlert, Lightbulb, MessageCircleQuestion, NotebookPen, Paperclip, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, BookmarkPlus, BookOpenCheck, CheckCircle2, CircleAlert, Lightbulb, MessageCircleQuestion, NotebookPen, Paperclip, ShieldCheck, Sparkles } from "lucide-react";
 import { EvidenceCitations } from "@/components/reviewer/evidence-citations";
 import { TurnstileWidget } from "@/components/reviewer/turnstile-widget";
 import { EmptyState } from "@/components/states/empty-state";
@@ -21,6 +21,7 @@ import { useCourseStream } from "@/hooks/use-course-stream";
 import { useObligations } from "@/hooks/use-obligations";
 import { useSources } from "@/hooks/use-sources";
 import {
+  convertStreamEntryToCard,
   createCourseStreamEntry,
   deleteCourseStreamEntry,
   requestCourseAnswer,
@@ -139,6 +140,21 @@ function StreamEntryCard({
   const [isRequestingAnswer, setIsRequestingAnswer] = useState(false);
   const [answerMode, setAnswerMode] = useState<CourseAnswerMode>(entry.answer_mode ?? "standard");
   const [error, setError] = useState<string | null>(null);
+  const [savingToNotebook, setSavingToNotebook] = useState(false);
+  const [savedToNotebook, setSavedToNotebook] = useState(false);
+
+  const saveToNotebook = async () => {
+    setSavingToNotebook(true);
+    setError(null);
+    try {
+      await convertStreamEntryToCard(projectId, entry.id);
+      setSavedToNotebook(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save to notebook.");
+    } finally {
+      setSavingToNotebook(false);
+    }
+  };
 
   useEffect(() => {
     setAnswerMode(entry.answer_mode ?? "standard");
@@ -379,6 +395,20 @@ function StreamEntryCard({
             )}
             <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} disabled={isSaving}>
               Edit
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={saveToNotebook}
+              disabled={isSaving || savingToNotebook || savedToNotebook}
+              title="Save this entry as a study card in your Notebook"
+            >
+              <BookmarkPlus className="mr-2 h-3.5 w-3.5" />
+              {savedToNotebook
+                ? "In notebook"
+                : savingToNotebook
+                  ? "Saving..."
+                  : "Save to notebook"}
             </Button>
             <Button variant="outline" size="sm" onClick={remove} disabled={isSaving}>
               {isSaving ? "Deleting..." : "Delete"}
