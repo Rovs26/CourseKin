@@ -10,7 +10,13 @@ import {
   Circle,
   ClipboardList,
   Clock3,
+  Flame,
+  Image as ImageIcon,
+  RotateCw,
+  Sparkles,
+  TimerReset,
   Trash2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,13 +34,22 @@ import { useProjectSummaries } from "@/hooks/use-project-summaries";
 import {
   createCourseTask,
   deleteCourseTask,
+  extractTaskProposals,
+  getActiveTaskFocus,
   getCalendarAgenda,
+  getTaskStats,
   listCourseTasks,
+  startTaskFocus,
+  stopTaskFocus,
   updateCourseTask,
   type CalendarAgenda,
   type CalendarAgendaItem,
   type CourseTask,
   type CourseTaskPriority,
+  type TaskFocusSession,
+  type TaskProposal,
+  type TaskRecurrenceRule,
+  type TaskStats,
 } from "@/lib/coursekin-api";
 import { routes } from "@/lib/routes";
 
@@ -104,15 +119,29 @@ function courseName(item: { course_code: string | null; project_title: string })
   return item.course_code || item.project_title;
 }
 
+function formatDuration(seconds: number): string {
+  if (!seconds) return "0m";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 function TaskRow({
   task,
+  activeFocus,
   onRefresh,
+  onFocusChange,
 }: {
   task: CourseTask;
+  activeFocus: TaskFocusSession | null;
   onRefresh: () => Promise<void>;
+  onFocusChange: () => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const focusedHere = activeFocus?.task_id === task.id;
+  const focusBlocked = Boolean(activeFocus) && !focusedHere;
 
   const toggle = async () => {
     setSaving(true);
@@ -143,8 +172,29 @@ function TaskRow({
     }
   };
 
+  const toggleFocus = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      if (focusedHere) {
+        await stopTaskFocus(task.project_id, task.id);
+      } else {
+        await startTaskFocus(task.project_id, task.id);
+      }
+      await Promise.all([onFocusChange(), onRefresh()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update focus session.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const subtaskRatio = task.subtask_count
+    ? `${task.completed_subtask_count}/${task.subtask_count} subtasks`
+    : null;
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
+    <div className={`rounded-xl border bg-white p-3 ${focusedHere ? "border-[var(--ck-primary)] ring-1 ring-[var(--ck-primary-soft)]" : "border-slate-200"}`}>
       <div className="flex items-start gap-3">
         <button
           type="button"
@@ -163,13 +213,268 @@ function TaskRow({
             {courseName(task)}
             {task.due_date ? ` / ${displayDate(task.due_date)}` : " / No date"}
             {` / ${task.priority} priority`}
+            {task.recurrence_rule ? ` / repeats ${task.recurrence_rule}` : ""}
+            {subtaskRatio ? ` / ${subtaskRatio}` : ""}
+            {task.focus_seconds_total ? ` / focused ${formatDuration(task.focus_seconds_total)}` : ""}
           </p>
+          {task.tags.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {task.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
           {task.notes && <p className="mt-2 text-sm leading-6 text-slate-600">{task.notes}</p>}
           {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
         </div>
-        <Button variant="ghost" size="icon" disabled={saving} onClick={remove} aria-label="Delete task">
-          <Trash2 className="h-4 w-4 text-slate-500" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {task.status !== "completed" && (
+            <Button
+              type="button"
+              variant={focusedHere ? "default" : "outline"}
+              size="sm"
+              disabled={saving || focusBlocked}
+              onClick={toggleFocus}
+              aria-label={focusedHere ? "Stop focus" : "Start focus"}
+              title={focusBlocked ? "Another focus session is running. Stop it first." : focusedHere ? "Stop focus" : "Start focus"}
+            >
+              <TimerReset className="mr-1 h-4 w-4" />
+              {focusedHere ? "Stop" : "Focus"}
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" disabled={saving} onClick={remove} aria-label="Delete task">
+            <Trash2 className="h-4 w-4 text-slate-500" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskProposalsModal({
+  projectId,
+  open,
+  onClose,
+  onCreated,
+}: {
+  projectId: string;
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => Promise<void>;
+}) {
+  const [text, setText] = useState("");
+  const [imageBase64, setImageBase64] = useState<string | undefined>();
+  const [imageName, setImageName] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [proposals, setProposals] = useState<TaskProposal[]>([]);
+  const [selected, setSelected] = useState<boolean[]>([]);
+  const [committing, setCommitting] = useState(false);
+
+  if (!open) return null;
+
+  const reset = () => {
+    setText("");
+    setImageBase64(undefined);
+    setImageName(null);
+    setProposals([]);
+    setSelected([]);
+    setError(null);
+    setLoading(false);
+    setCommitting(false);
+  };
+
+  const close = () => {
+    reset();
+    onClose();
+  };
+
+  const handleImage = async (file: File | null) => {
+    if (!file) {
+      setImageBase64(undefined);
+      setImageName(null);
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      setError("Image must be 4MB or smaller.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      setImageBase64(comma >= 0 ? result.slice(comma + 1) : result);
+      setImageName(file.name);
+      setError(null);
+    };
+    reader.onerror = () => setError("Could not read image file.");
+    reader.readAsDataURL(file);
+  };
+
+  const extract = async () => {
+    if (!text.trim() && !imageBase64) {
+      setError("Paste text or attach a photo first.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await extractTaskProposals(projectId, {
+        text: text.trim() || undefined,
+        image_base64: imageBase64,
+      });
+      setProposals(result.proposals);
+      setSelected(result.proposals.map(() => true));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not extract task proposals.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const commit = async () => {
+    const picks = proposals.filter((_, idx) => selected[idx]);
+    if (picks.length === 0) {
+      setError("Select at least one proposal to add.");
+      return;
+    }
+    setCommitting(true);
+    setError(null);
+    try {
+      for (const proposal of picks) {
+        await createCourseTask(projectId, {
+          title: proposal.title,
+          notes: proposal.notes || undefined,
+          due_date: proposal.due_date || undefined,
+          priority: proposal.priority,
+        });
+      }
+      await onCreated();
+      close();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create tasks.");
+    } finally {
+      setCommitting(false);
+    }
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="extract-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+      onClick={close}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b p-4">
+          <h3 id="extract-modal-title" className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+            <Sparkles className="h-5 w-5 text-[var(--ck-primary)]" />
+            Extract tasks from text or photo
+          </h3>
+          <button onClick={close} aria-label="Close" className="text-slate-500 hover:text-slate-900">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4 p-4">
+          {proposals.length === 0 ? (
+            <>
+              <p className="text-sm text-slate-600">
+                Paste the relevant chunk of an announcement, email, or board notes.
+                You can also attach a photo of a handwritten or printed task list.
+                CourseKin proposes structured tasks — you pick which to add.
+              </p>
+              <div className="space-y-1">
+                <Label htmlFor="extract-text">Pasted text</Label>
+                <Textarea
+                  id="extract-text"
+                  value={text}
+                  onChange={(event) => setText(event.target.value)}
+                  className="min-h-[140px]"
+                  maxLength={8000}
+                  placeholder="Paste an email, syllabus excerpt, or class announcement here..."
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="extract-image" className="flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  Photo (optional, max 4MB)
+                </Label>
+                <input
+                  id="extract-image"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => handleImage(event.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:text-slate-700 hover:file:bg-slate-50"
+                />
+                {imageName && <p className="text-xs text-slate-500">Attached: {imageName}</p>}
+              </div>
+              {error && <p className="text-sm text-rose-600">{error}</p>}
+              <Button onClick={extract} disabled={loading} className="w-full">
+                {loading ? "Extracting..." : "Extract proposals"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600">
+                Review each proposal. Untick the ones you don't want before adding.
+              </p>
+              <div className="space-y-2">
+                {proposals.map((proposal, idx) => (
+                  <label
+                    key={idx}
+                    className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected[idx] ?? true}
+                      onChange={(event) => {
+                        const next = [...selected];
+                        next[idx] = event.target.checked;
+                        setSelected(next);
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-900">{proposal.title}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {proposal.due_date ? `Due ${displayDate(proposal.due_date)}` : "No date"}
+                        {` / ${proposal.priority} priority / ${proposal.confidence} confidence`}
+                      </p>
+                      {proposal.uncertain_fields.length > 0 && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Uncertain: {proposal.uncertain_fields.join(", ")}
+                        </p>
+                      )}
+                      {proposal.notes && (
+                        <p className="mt-1 text-xs text-slate-600">{proposal.notes}</p>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+              {error && <p className="text-sm text-rose-600">{error}</p>}
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setProposals([])} disabled={committing}>
+                  <RotateCw className="mr-2 h-4 w-4" />
+                  Start over
+                </Button>
+                <Button onClick={commit} disabled={committing} className="flex-1">
+                  {committing ? "Adding..." : `Add selected (${selected.filter(Boolean).length})`}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -186,12 +491,34 @@ export function CalendarWorkspace() {
   const [taskNotes, setTaskNotes] = useState("");
   const [taskDate, setTaskDate] = useState("");
   const [priority, setPriority] = useState<CourseTaskPriority>("medium");
+  const [tagsInput, setTagsInput] = useState("");
+  const [recurrence, setRecurrence] = useState<TaskRecurrenceRule | "none">("none");
   const [projectId, setProjectId] = useState("");
+  const [activeFocus, setActiveFocus] = useState<TaskFocusSession | null>(null);
+  const [stats, setStats] = useState<TaskStats | null>(null);
+  const [extractOpen, setExtractOpen] = useState(false);
   const { projects, isLoading: coursesLoading } = useProjectSummaries();
 
   useEffect(() => {
     if (!projectId && projects.length > 0) setProjectId(projects[0].id);
   }, [projectId, projects]);
+
+  const refreshFocus = useCallback(async () => {
+    try {
+      const session = await getActiveTaskFocus();
+      setActiveFocus(session);
+    } catch {
+      setActiveFocus(null);
+    }
+  }, []);
+
+  const refreshStats = useCallback(async () => {
+    try {
+      setStats(await getTaskStats());
+    } catch {
+      setStats(null);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -209,11 +536,20 @@ export function CalendarWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [month]);
+    await Promise.all([refreshFocus(), refreshStats()]);
+  }, [month, refreshFocus, refreshStats]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const parseTags = (raw: string): string[] | undefined => {
+    const cleaned = raw
+      .split(/[\s,]+/)
+      .map((tag) => tag.trim().toLowerCase().replace(/^#/, ""))
+      .filter(Boolean);
+    return cleaned.length ? cleaned : undefined;
+  };
 
   const addTask = async (event: FormEvent) => {
     event.preventDefault();
@@ -226,11 +562,15 @@ export function CalendarWorkspace() {
         notes: taskNotes.trim() || undefined,
         due_date: taskDate || undefined,
         priority,
+        tags: parseTags(tagsInput),
+        recurrence_rule: recurrence === "none" ? undefined : recurrence,
       });
       setTaskTitle("");
       setTaskNotes("");
       setTaskDate("");
       setPriority("medium");
+      setTagsInput("");
+      setRecurrence("none");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create task.");
@@ -266,7 +606,7 @@ export function CalendarWorkspace() {
 
       {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="p-4">
           <p className="text-xs text-slate-500">Open tasks</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{agenda?.open_tasks ?? 0}</p>
@@ -279,7 +619,30 @@ export function CalendarWorkspace() {
           <p className="text-xs text-slate-500">Upcoming confirmed deadlines</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{agenda?.upcoming_deadlines ?? 0}</p>
         </Card>
+        <Card className="p-4">
+          <p className="flex items-center gap-1.5 text-xs text-slate-500">
+            <Flame className="h-3.5 w-3.5 text-orange-500" />
+            Streak
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-slate-900">
+            {stats ? `${stats.streak.current_streak_days}d` : "--"}
+          </p>
+          {stats && (
+            <p className="mt-1 text-[11px] text-slate-500">
+              {stats.completed_last_7d} done last 7d / focus {formatDuration(stats.focus_seconds_last_7d)}
+            </p>
+          )}
+        </Card>
       </div>
+
+      {activeFocus && (
+        <Card className="border-[var(--ck-primary)] bg-[var(--ck-primary-soft)] p-4">
+          <p className="flex items-center gap-2 text-sm font-medium text-[var(--ck-ink)]">
+            <TimerReset className="h-4 w-4 text-[var(--ck-primary)]" />
+            Focus session running on a task. Tap "Stop" on its row to log it.
+          </p>
+        </Card>
+      )}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <Card className="overflow-hidden">
@@ -454,12 +817,49 @@ export function CalendarWorkspace() {
                       </Select>
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="task-tags">Tags</Label>
+                      <Input
+                        id="task-tags"
+                        value={tagsInput}
+                        onChange={(event) => setTagsInput(event.target.value)}
+                        placeholder="readings, midterm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Recurrence</Label>
+                      <Select
+                        value={recurrence}
+                        onValueChange={(value) => setRecurrence(value as TaskRecurrenceRule | "none")}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No repeat</SelectItem>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="biweekly">Every 2 weeks</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <div className="space-y-1">
                     <Label htmlFor="task-notes">Notes</Label>
                     <Textarea id="task-notes" value={taskNotes} onChange={(event) => setTaskNotes(event.target.value)} maxLength={2000} className="min-h-[72px]" placeholder="Optional details" />
                   </div>
                   <Button type="submit" disabled={saving || !projectId || !taskTitle.trim()} className="w-full">
                     {saving ? "Adding..." : "Add task"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={!projectId}
+                    onClick={() => setExtractOpen(true)}
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Extract from text or photo
                   </Button>
                 </form>
               )}
@@ -479,18 +879,43 @@ export function CalendarWorkspace() {
                   No open tasks. Add the next small action for a course.
                 </p>
               ) : (
-                openTasks.map((task) => <TaskRow key={task.id} task={task} onRefresh={refresh} />)
+                openTasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    activeFocus={activeFocus}
+                    onRefresh={refresh}
+                    onFocusChange={refreshFocus}
+                  />
+                ))
               )}
               {completedTasks.length > 0 && (
                 <div className="space-y-3 border-t pt-4">
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Recently completed</p>
-                  {completedTasks.map((task) => <TaskRow key={task.id} task={task} onRefresh={refresh} />)}
+                  {completedTasks.map((task) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      activeFocus={activeFocus}
+                      onRefresh={refresh}
+                      onFocusChange={refreshFocus}
+                    />
+                  ))}
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {projectId && (
+        <TaskProposalsModal
+          projectId={projectId}
+          open={extractOpen}
+          onClose={() => setExtractOpen(false)}
+          onCreated={refresh}
+        />
+      )}
     </div>
   );
 }
