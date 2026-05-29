@@ -18,6 +18,25 @@ services:
       retries: 3
       start_period: 10s
 
+  worker:
+    build: ../api
+    container_name: reviewflow_worker
+    command: ["python", "-m", "scripts.job_worker"]
+    volumes:
+      - ../api:/app
+      - reviewflow_db:/app/data
+      - reviewflow_uploads:/app/uploads
+    env_file:
+      - ../api/.env
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+    # Worker is a long-running poller with no HTTP server; the inherited
+    # /health check from the api image would never pass, so disable it.
+    healthcheck:
+      disable: true
+
 volumes:
   reviewflow_db:
   reviewflow_uploads:
