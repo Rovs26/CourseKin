@@ -17,6 +17,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/states/empty-state";
 import { TurnstileWidget } from "@/components/reviewer/turnstile-widget";
+import { CoveragePanel } from "@/features/planning/coverage-panel";
 import { PreparationRunway } from "@/features/planning/preparation-runway";
 import { useProject } from "@/hooks/use-project";
 import { useSources } from "@/hooks/use-sources";
@@ -449,6 +450,10 @@ export function CoursePlanningWorkspace({ projectId }: { projectId: string }) {
 
       <div id="preparation-runway" className="scroll-mt-20">
         <PreparationRunway projectId={projectId} refreshToken={runwayRefreshToken} />
+      </div>
+
+      <div id="coverage" className="scroll-mt-20">
+        <CoveragePanel projectId={projectId} />
       </div>
     </div>
   );
