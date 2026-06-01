@@ -39,13 +39,15 @@ def _call_openai(source_text: str, project: Project) -> tuple[dict, dict]:
     system_prompt = """You extract academic obligations from a university course syllabus.
 
 Return strict JSON only in this schema:
-{"obligations":[{"title":"string","obligation_type":"quiz|exam|assignment|project|paper|reading|other","due_date":"YYYY-MM-DD or null","details":"string or null","grading_criteria":"string or null","confidence":"high|medium|low","uncertain_fields":["field_name"]}]}
+{"obligations":[{"title":"string","obligation_type":"quiz|exam|assignment|project|paper|reading|other","due_date":"YYYY-MM-DD or null","details":"string or null","grading_criteria":"string or null","topics":["string"],"topic_weights":{"topic":number},"confidence":"high|medium|low","uncertain_fields":["field_name"]}]}
 
 Rules:
 - Use only obligations explicitly stated in the syllabus.
 - Extract assessments, light assignments, projects, papers, required readings with due dates, and exams.
 - Never infer a calendar date. If a date is incomplete or ambiguous, set due_date to null and add "due_date" to uncertain_fields.
 - Preserve any grading percentage, rubric, or criteria in grading_criteria.
+- For topics: pick up to 6 short lowercase topic labels (1-3 words each, no punctuation) that the obligation covers, based on the syllabus topic outline or section the obligation belongs to. If the syllabus does not state coverage for an obligation, return an empty topics list.
+- For topic_weights: if the syllabus indicates the relative importance of each topic for this obligation (e.g. an exam allocates 40% to a topic, or marks per question), output a map of topic to percentage weight (0-100). Keys MUST be a subset of "topics". Values should sum near 100 when the syllabus states weights for all topics; otherwise include only the topics with stated weights. Omit this field (or use an empty object) when the syllabus says nothing about weighting.
 - These are proposals for the student to review, not confirmed calendar events."""
     user_prompt = "\n".join(context) + "\n\nSyllabus text:\n" + source_text
 
@@ -114,6 +116,36 @@ def _normalize_obligations(payload: dict) -> list[dict]:
             uncertain.append("due_date")
         obligation_type = str(raw.get("obligation_type", "other"))
         confidence = str(raw.get("confidence", "low"))
+        raw_topics = raw.get("topics")
+        topics: list[str] = []
+        if isinstance(raw_topics, list):
+            for value in raw_topics:
+                if not isinstance(value, str):
+                    continue
+                label = value.strip().lower()[:60]
+                if label and label not in topics:
+                    topics.append(label)
+                if len(topics) >= 8:
+                    break
+        raw_weights = raw.get("topic_weights")
+        topic_weights: dict[str, float] | None = None
+        if isinstance(raw_weights, dict):
+            cleaned: dict[str, float] = {}
+            for key, value in raw_weights.items():
+                if not isinstance(key, str):
+                    continue
+                label = key.strip().lower()[:60]
+                if not label or label not in topics:
+                    continue
+                try:
+                    weight = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if weight < 0:
+                    continue
+                cleaned[label] = round(min(weight, 100.0), 2)
+            if cleaned:
+                topic_weights = cleaned
         normalized.append(
             {
                 "title": title,
@@ -121,6 +153,8 @@ def _normalize_obligations(payload: dict) -> list[dict]:
                 "due_date": due_date,
                 "details": _optional_text(raw.get("details")),
                 "grading_criteria": _optional_text(raw.get("grading_criteria")),
+                "topics": topics,
+                "topic_weights": topic_weights,
                 "confidence": confidence if confidence in VALID_CONFIDENCE else "low",
                 "uncertain_fields": uncertain,
             }

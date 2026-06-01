@@ -29,7 +29,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import { useProjectSummaries } from "@/hooks/use-project-summaries";
 import {
   createCourseTask,
@@ -52,14 +54,26 @@ import {
   type TaskStats,
 } from "@/lib/coursekin-api";
 import { routes } from "@/lib/routes";
+import { burstConfetti } from "@/lib/confetti";
+import { CalendarSubscribeCard } from "@/features/calendar/calendar-subscribe-card";
+import { LoadHeatmap } from "@/features/calendar/load-heatmap";
+import { StudyAssistant } from "@/features/planner/study-assistant";
 
 const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const itemStyles = {
-  deadline: "border-amber-200 bg-amber-50 text-amber-900",
-  preparation_session: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  task: "border-slate-200 bg-slate-50 text-slate-800",
+  deadline:
+    "border border-amber-200/60 bg-amber-100/70 text-amber-900 backdrop-blur-sm",
+  preparation_session:
+    "border border-emerald-200/60 bg-emerald-100/70 text-emerald-900 backdrop-blur-sm",
+  task: "border border-slate-200/60 bg-white/70 text-slate-800 backdrop-blur-sm",
 };
+
+// iOS/macOS glass surface — used across the calendar to feel lighter and more connected.
+const glassSurface =
+  "rounded-3xl border border-white/50 bg-white/60 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.18)] backdrop-blur-2xl";
+const glassSurfaceSubtle =
+  "rounded-3xl border border-white/40 bg-white/50 shadow-[0_4px_20px_-12px_rgba(15,23,42,0.12)] backdrop-blur-xl";
 
 const itemLabels = {
   deadline: "Deadline",
@@ -144,13 +158,18 @@ function TaskRow({
   const focusBlocked = Boolean(activeFocus) && !focusedHere;
 
   const toggle = async () => {
+    const completing = task.status !== "completed";
     setSaving(true);
     setError(null);
     try {
       await updateCourseTask(task.project_id, task.id, {
-        status: task.status === "completed" ? "open" : "completed",
+        status: completing ? "completed" : "open",
       });
       await onRefresh();
+      if (completing) {
+        burstConfetti();
+        toast.success("Task done", { description: "Nice — keep the streak going." });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update task.");
     } finally {
@@ -194,7 +213,7 @@ function TaskRow({
     : null;
 
   return (
-    <div className={`rounded-xl border bg-white p-3 ${focusedHere ? "border-[var(--ck-primary)] ring-1 ring-[var(--ck-primary-soft)]" : "border-slate-200"}`}>
+    <div className={`rounded-2xl border bg-white/70 p-3 backdrop-blur-md transition-colors ${focusedHere ? "border-[var(--ck-primary)] ring-1 ring-[var(--ck-primary-soft)]" : "border-white/50"}`}>
       <div className="flex items-start gap-3">
         <button
           type="button"
@@ -426,7 +445,7 @@ function TaskProposalsModal({
           ) : (
             <>
               <p className="text-sm text-slate-600">
-                Review each proposal. Untick the ones you don't want before adding.
+                Review each proposal. Untick the ones you don&apos;t want before adding.
               </p>
               <div className="space-y-2">
                 {proposals.map((proposal, idx) => (
@@ -572,8 +591,14 @@ export function CalendarWorkspace() {
       setTagsInput("");
       setRecurrence("none");
       await refresh();
+      toast.success("Task added", {
+        description: taskDate ? `Due ${displayDate(taskDate)}` : undefined,
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create task.");
+      const message =
+        err instanceof Error ? err.message : "Could not create task.";
+      setError(message);
+      toast.error("Could not add task", { description: message });
     } finally {
       setSaving(false);
     }
@@ -590,37 +615,47 @@ export function CalendarWorkspace() {
   const completedTasks = tasks.filter((task) => task.status === "completed").slice(0, 4);
 
   return (
-    <div className="space-y-7">
-      <header className="border-b pb-6">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ck-primary)]">
+    <div className="relative space-y-6">
+      {/* Soft ambient backdrop for the glass surfaces to read against. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -top-10 -z-10 h-72 bg-gradient-to-br from-sky-100/60 via-violet-100/40 to-rose-100/40 blur-3xl"
+      />
+
+      <header className="pb-2">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ck-primary)]">
           Calendar & Tasks
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+        <h1 className="text-[28px] font-semibold tracking-tight text-slate-900">
           Plan the term, one course at a time.
         </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+        <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600">
           Confirmed course dates and preparation sessions appear here. Add your own tasks as work
           becomes clear. CourseKin never places an extracted deadline here before you confirm it.
         </p>
       </header>
 
-      {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+      {error && (
+        <p className="rounded-2xl border border-rose-200/60 bg-rose-50/80 p-3 text-sm text-rose-700 backdrop-blur-sm">
+          {error}
+        </p>
+      )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-4">
-          <p className="text-xs text-slate-500">Open tasks</p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className={`${glassSurfaceSubtle} p-4`}>
+          <p className="text-[11px] uppercase tracking-wide text-slate-500">Open tasks</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{agenda?.open_tasks ?? 0}</p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs text-slate-500">Past due tasks</p>
+        <Card className={`${glassSurfaceSubtle} p-4`}>
+          <p className="text-[11px] uppercase tracking-wide text-slate-500">Past due tasks</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{agenda?.overdue_tasks ?? 0}</p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs text-slate-500">Upcoming confirmed deadlines</p>
+        <Card className={`${glassSurfaceSubtle} p-4`}>
+          <p className="text-[11px] uppercase tracking-wide text-slate-500">Upcoming deadlines</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{agenda?.upcoming_deadlines ?? 0}</p>
         </Card>
-        <Card className="p-4">
-          <p className="flex items-center gap-1.5 text-xs text-slate-500">
+        <Card className={`${glassSurfaceSubtle} p-4`}>
+          <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-slate-500">
             <Flame className="h-3.5 w-3.5 text-orange-500" />
             Streak
           </p>
@@ -629,24 +664,30 @@ export function CalendarWorkspace() {
           </p>
           {stats && (
             <p className="mt-1 text-[11px] text-slate-500">
-              {stats.completed_last_7d} done last 7d / focus {formatDuration(stats.focus_seconds_last_7d)}
+              {stats.completed_last_7d} done last 7d · focus {formatDuration(stats.focus_seconds_last_7d)}
             </p>
           )}
         </Card>
       </div>
 
       {activeFocus && (
-        <Card className="border-[var(--ck-primary)] bg-[var(--ck-primary-soft)] p-4">
+        <Card className="rounded-3xl border border-[var(--ck-primary-border)]/60 bg-[var(--ck-primary-soft)]/80 p-4 backdrop-blur-xl">
           <p className="flex items-center gap-2 text-sm font-medium text-[var(--ck-ink)]">
             <TimerReset className="h-4 w-4 text-[var(--ck-primary)]" />
-            Focus session running on a task. Tap "Stop" on its row to log it.
+            Focus session running on a task. Tap &ldquo;Stop&rdquo; on its row to log it.
           </p>
         </Card>
       )}
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <Card className="overflow-hidden">
-          <CardHeader className="flex-row items-center justify-between space-y-0 border-b p-5">
+      <StudyAssistant onConfirmed={refresh} />
+
+      <LoadHeatmap />
+
+      <CalendarSubscribeCard />
+
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <Card className={`${glassSurface} overflow-hidden`}>
+          <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-white/40 bg-white/30 p-4 sm:p-5 backdrop-blur-xl">
             <div>
               <CardTitle className="flex items-center gap-2 text-lg text-slate-900">
                 <CalendarDays className="h-5 w-5 text-[var(--ck-primary)]" />
@@ -656,39 +697,75 @@ export function CalendarWorkspace() {
                 Deadlines, study sessions, and dated tasks.
               </p>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="icon" onClick={() => setMonth(moveMonth(month, -1))} aria-label="Previous month">
+            <div className="flex gap-1.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full bg-white/70 backdrop-blur-md hover:bg-white"
+                onClick={() => setMonth(moveMonth(month, -1))}
+                aria-label="Previous month"
+              >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button variant="outline" size="icon" onClick={() => setMonth(moveMonth(month, 1))} aria-label="Next month">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full bg-white/70 backdrop-blur-md hover:bg-white"
+                onClick={() => setMonth(moveMonth(month, 1))}
+                aria-label="Next month"
+              >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="p-5">
+          <CardContent className="p-3 sm:p-4">
             {loading ? (
-              <p className="text-sm text-slate-500">Loading calendar...</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-7 gap-1.5">
+                  {weekdays.map((w) => (
+                    <Skeleton key={w} className="h-3 w-full" />
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {Array.from({ length: 35 }).map((_, i) => (
+                    <Skeleton key={i} className="h-20 w-full rounded-xl" />
+                  ))}
+                </div>
+              </div>
             ) : (
               <div>
-                <div className="grid grid-cols-7 border-b pb-2">
+                <div className="grid grid-cols-7 pb-1.5">
                   {weekdays.map((weekday) => (
-                    <p key={weekday} className="text-center text-xs font-medium uppercase tracking-wide text-slate-400">
+                    <p
+                      key={weekday}
+                      className="text-center text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400"
+                    >
                       {weekday}
                     </p>
                   ))}
                 </div>
-                <div className="grid grid-cols-7">
+                <div className="grid grid-cols-7 gap-[2px] rounded-2xl bg-white/30 p-[2px]">
                   {monthCells(month).map((dateValue, index) => {
                     const items = dateValue ? calendarItems.get(dateValue) ?? [] : [];
                     const isToday = dateValue === localDateValue();
                     return (
                       <div
                         key={dateValue ?? `blank-${index}`}
-                        className="min-h-[108px] border-b border-r border-slate-100 p-1.5 sm:p-2"
+                        className={`min-h-[88px] rounded-xl p-1.5 transition-colors sm:p-2 ${
+                          dateValue
+                            ? "bg-white/60 backdrop-blur-sm hover:bg-white/85"
+                            : "bg-transparent"
+                        }`}
                       >
                         {dateValue && (
                           <>
-                            <p className={`mb-1 text-xs ${isToday ? "inline-flex rounded-full bg-[var(--ck-primary)] px-2 py-0.5 font-medium text-white" : "text-slate-500"}`}>
+                            <p
+                              className={`mb-1 text-xs ${
+                                isToday
+                                  ? "inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ck-primary)] font-semibold text-white shadow-sm"
+                                  : "text-slate-500"
+                              }`}
+                            >
                               {Number(dateValue.slice(-2))}
                             </p>
                             <div className="space-y-1">
@@ -696,7 +773,7 @@ export function CalendarWorkspace() {
                                 item.item_type === "task" ? (
                                   <p
                                     key={`${item.item_type}-${item.id}`}
-                                    className={`truncate rounded border px-1.5 py-1 text-[11px] leading-tight ${itemStyles[item.item_type]} ${item.status === "completed" ? "opacity-50 line-through" : ""}`}
+                                    className={`truncate rounded-md px-1.5 py-1 text-[11px] leading-tight ${itemStyles[item.item_type]} ${item.status === "completed" ? "opacity-50 line-through" : ""}`}
                                   >
                                     {item.title}
                                   </p>
@@ -704,7 +781,7 @@ export function CalendarWorkspace() {
                                   <Link
                                     key={`${item.item_type}-${item.id}`}
                                     href={routes.coursePlan(item.project_id)}
-                                    className={`block truncate rounded border px-1.5 py-1 text-[11px] leading-tight ${itemStyles[item.item_type]} ${item.status === "completed" ? "opacity-50 line-through" : ""}`}
+                                    className={`block truncate rounded-md px-1.5 py-1 text-[11px] leading-tight transition-opacity hover:opacity-90 ${itemStyles[item.item_type]} ${item.status === "completed" ? "opacity-50 line-through" : ""}`}
                                   >
                                     {item.title}
                                   </Link>
@@ -721,9 +798,9 @@ export function CalendarWorkspace() {
                   })}
                 </div>
 
-                <div className="mt-5 space-y-2 border-t pt-4">
+                <div className="mt-4 space-y-1.5 border-t border-white/40 pt-3">
                   {(agenda?.items ?? []).length === 0 ? (
-                    <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+                    <p className="rounded-2xl bg-white/40 p-4 text-sm text-slate-600 backdrop-blur-sm">
                       No dated items this month. Confirm syllabus dates in a course plan or add a task.
                     </p>
                   ) : (
@@ -733,8 +810,8 @@ export function CalendarWorkspace() {
                           <div>
                             <p className="text-sm font-medium text-slate-900">{item.title}</p>
                             <p className="mt-1 text-xs text-slate-500">
-                              {courseName(item)} / {itemLabels[item.item_type]}
-                              {item.estimated_minutes ? ` / ${item.estimated_minutes} minutes` : ""}
+                              {courseName(item)} · {itemLabels[item.item_type]}
+                              {item.estimated_minutes ? ` · ${item.estimated_minutes} min` : ""}
                             </p>
                           </div>
                           <p className="text-xs font-medium text-slate-600">{displayDate(item.date)}</p>
@@ -743,7 +820,7 @@ export function CalendarWorkspace() {
                       return item.item_type === "task" ? (
                         <div
                           key={`${item.item_type}-${item.id}-agenda`}
-                          className="flex flex-col justify-between gap-2 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-center"
+                          className="flex flex-col justify-between gap-2 rounded-2xl border border-white/50 bg-white/60 p-3 backdrop-blur-md sm:flex-row sm:items-center"
                         >
                           {content}
                         </div>
@@ -751,7 +828,7 @@ export function CalendarWorkspace() {
                         <Link
                           key={`${item.item_type}-${item.id}-agenda`}
                           href={routes.coursePlan(item.project_id)}
-                          className="flex flex-col justify-between gap-2 rounded-xl border border-slate-200 p-3 hover:bg-slate-50 sm:flex-row sm:items-center"
+                          className="flex flex-col justify-between gap-2 rounded-2xl border border-white/50 bg-white/60 p-3 backdrop-blur-md transition-colors hover:bg-white/85 sm:flex-row sm:items-center"
                         >
                           {content}
                         </Link>
@@ -764,9 +841,9 @@ export function CalendarWorkspace() {
           </CardContent>
         </Card>
 
-        <div className="space-y-5">
-          <Card>
-            <CardHeader className="pb-4">
+        <div className="space-y-4">
+          <Card className={glassSurface}>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg text-slate-900">
                 <ClipboardList className="h-5 w-5 text-[var(--ck-primary)]" />
                 Add task
@@ -866,8 +943,8 @@ export function CalendarWorkspace() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-4">
+          <Card className={glassSurface}>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg text-slate-900">
                 <Clock3 className="h-5 w-5 text-[var(--ck-primary)]" />
                 Open tasks
@@ -875,7 +952,7 @@ export function CalendarWorkspace() {
             </CardHeader>
             <CardContent className="space-y-3">
               {openTasks.length === 0 ? (
-                <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                <p className="rounded-2xl bg-white/60 p-3 text-sm text-slate-600 backdrop-blur-sm">
                   No open tasks. Add the next small action for a course.
                 </p>
               ) : (

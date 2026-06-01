@@ -5,7 +5,35 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.core.utils import utc_now_iso
-from app.db.models import CourseObligation, PreparationMilestone
+from app.db.models import CourseObligation, CourseTask, PreparationMilestone
+
+
+# Per-task minute estimates used when budgeting milestone load against existing
+# student tasks. CourseTask does not store estimated minutes, so we approximate
+# by priority so that high-priority tasks consume more of the day's budget.
+TASK_MINUTES_BY_PRIORITY: dict[str, int] = {
+    "high": 60,
+    "medium": 30,
+    "low": 20,
+}
+
+
+def _task_load_by_day(db: Session, project_id: str) -> dict[str, int]:
+    tasks = (
+        db.query(CourseTask)
+        .filter(
+            CourseTask.project_id == project_id,
+            CourseTask.status == "open",
+            CourseTask.due_date.isnot(None),
+        )
+        .all()
+    )
+    load: dict[str, int] = defaultdict(int)
+    for task in tasks:
+        if not task.due_date:
+            continue
+        load[task.due_date] += TASK_MINUTES_BY_PRIORITY.get(task.priority, 30)
+    return load
 
 
 MilestoneTemplate = tuple[str, str, int, int]
@@ -114,6 +142,11 @@ def rebuild_preparation_plan(
     load_by_day: dict[str, int] = defaultdict(int)
     for item in existing_completed:
         load_by_day[item.scheduled_date] += item.estimated_minutes
+    # Workload balance: avoid scheduling milestones on days the student already
+    # has open course tasks due. Treat each open task as an estimated block of
+    # minutes based on its priority.
+    for day, minutes in _task_load_by_day(db, project_id).items():
+        load_by_day[day] += minutes
 
     db.query(PreparationMilestone).filter(
         PreparationMilestone.project_id == project_id,

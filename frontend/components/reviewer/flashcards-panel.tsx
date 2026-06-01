@@ -6,10 +6,12 @@ export function FlashcardsPanel({
   cards,
   evidence,
   onFeedback,
+  projectId,
 }: {
   cards: { front: string; back: string }[];
   evidence?: ReviewerEvidenceItem[];
   onFeedback?: (index: number, rating: ReviewerFeedbackRating) => Promise<void>;
+  projectId?: string;
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -19,6 +21,7 @@ export function FlashcardsPanel({
           <EvidenceCitations
             evidence={evidence?.[index]}
             onFeedback={onFeedback ? (rating) => onFeedback(index, rating) : undefined}
+            projectId={projectId}
           />
         </div>
       ))}

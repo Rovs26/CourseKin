@@ -39,6 +39,8 @@ html.dark {
   --rf-bg: var(--ck-bg);
   --rf-shell-bg: var(--ck-shell-bg);
   --rf-card: #1d221e;
+  /* RGB channels of --rf-card, for token-driven translucent "glass" surfaces. */
+  --rf-card-rgb: 29 34 30;
   --rf-soft: #232a25;
   --rf-soft-2: #303830;
   --rf-text: #f0ebe2;
@@ -75,24 +77,53 @@ html.dark .brand-wash {
   background: var(--ck-bg);
 }
 
-html.dark .bg-white {
+html.dark .bg-white,
+html.dark .hover\:bg-white:hover {
   background-color: var(--rf-card) !important;
 }
 
+/* Translucent "glass" surfaces map onto the dark card RGB token so they keep
+   their layering/blur over the dark base instead of flashing white. Alphas are
+   nudged up slightly so faint tints (/30, /40) stay visible on the dark shell. */
+html.dark .bg-white\/95 {
+  background-color: rgb(var(--rf-card-rgb) / 0.95) !important;
+}
+
 html.dark .bg-white\/90 {
-  background-color: rgba(29, 34, 30, 0.92) !important;
+  background-color: rgb(var(--rf-card-rgb) / 0.92) !important;
+}
+
+html.dark .bg-white\/85,
+html.dark .hover\:bg-white\/85:hover {
+  background-color: rgb(var(--rf-card-rgb) / 0.88) !important;
+}
+
+html.dark .bg-white\/80 {
+  background-color: rgb(var(--rf-card-rgb) / 0.85) !important;
 }
 
 html.dark .bg-white\/75 {
-  background-color: rgba(29, 34, 30, 0.82) !important;
+  background-color: rgb(var(--rf-card-rgb) / 0.82) !important;
 }
 
 html.dark .bg-white\/70 {
-  background-color: rgba(29, 34, 30, 0.76) !important;
+  background-color: rgb(var(--rf-card-rgb) / 0.78) !important;
 }
 
 html.dark .bg-white\/60 {
-  background-color: rgba(29, 34, 30, 0.68) !important;
+  background-color: rgb(var(--rf-card-rgb) / 0.7) !important;
+}
+
+html.dark .bg-white\/50 {
+  background-color: rgb(var(--rf-card-rgb) / 0.62) !important;
+}
+
+html.dark .bg-white\/40 {
+  background-color: rgb(var(--rf-card-rgb) / 0.55) !important;
+}
+
+html.dark .bg-white\/30 {
+  background-color: rgb(var(--rf-card-rgb) / 0.45) !important;
 }
 
 html.dark .bg-slate-50 {
@@ -129,14 +160,41 @@ html.dark .bg-slate-200 {
 }
 
 html.dark .border,
-html.dark .border-slate-200 {
+html.dark .border-slate-200,
+html.dark .border-slate-200\/60,
+html.dark .border-slate-100 {
   border-color: var(--rf-border) !important;
 }
 
-html.dark .bg-slate-100 {
-  background-color: var(--rf-soft-2) !important;
+/* Bright white hairline borders used on glass cards become a faint light
+   stroke rather than a glaring white line on the dark surface. */
+html.dark .border-white,
+html.dark .border-white\/60,
+html.dark .border-white\/50,
+html.dark .border-white\/40,
+html.dark .border-white\/30 {
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 html.dark .ring-slate-200\/70 {
   --tw-ring-color: rgba(51, 65, 85, 0.7) !important;
+}
+
+/* Light pastel banner gradients (e.g. from-violet-50 via-white to-sky-50)
+   render as near-white slabs in dark mode. Flatten them to the card surface. */
+html.dark .bg-gradient-to-br.from-violet-50,
+html.dark .bg-gradient-to-r.from-violet-50,
+html.dark .bg-gradient-to-b.from-violet-50,
+html.dark .bg-gradient-to-br.from-sky-50,
+html.dark .bg-gradient-to-br.from-emerald-50 {
+  background-image: none !important;
+  background-color: var(--rf-card) !important;
+}
+
+/* Decorative blurred color blobs are far too bright on the dark shell; dim
+   them so they read as a subtle glow instead of washing the page out. */
+html.dark .from-sky-100\/60,
+html.dark .via-violet-100\/40,
+html.dark .to-rose-100\/40 {
+  opacity: 0.2 !important;
 }

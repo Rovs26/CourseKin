@@ -144,6 +144,40 @@ def normalize_grounded_answer(payload: dict, chunks: list[dict]) -> dict:
     }
 
 
+def answer_question_now(
+    question: str,
+    source_chunks: list[dict],
+    explanation_mode: str = "standard",
+) -> tuple[dict, dict]:
+    """Synchronous grounded answer for chat-style Q&A over a course's materials.
+
+    Returns ``(normalized_answer, usage)``. ``usage`` is zeroed when no model call
+    was made (no usable chunks) so the caller can still record it consistently.
+    """
+    chunks = _prepare_chunks(source_chunks)
+    zero_usage = {
+        "model": settings.OPENAI_MODEL,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0,
+    }
+    if not chunks:
+        return (
+            {
+                "answer_status": "insufficient_evidence",
+                "answer_content": None,
+                "answer_evidence": {
+                    "status": "not_found",
+                    "source_scope": "course_materials_only",
+                    "citations": [],
+                },
+            },
+            zero_usage,
+        )
+    payload, usage = _call_openai(question, _format_material(chunks), explanation_mode)
+    return normalize_grounded_answer(payload, chunks), usage
+
+
 def run_course_answer_in_background(
     job_id: str,
     project_id: str,

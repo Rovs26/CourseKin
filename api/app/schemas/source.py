@@ -1,9 +1,22 @@
 from typing import Literal
 
-from pydantic import BaseModel, HttpUrl, field_validator, model_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
 
 SourcePurpose = Literal["study_material", "syllabus", "lecture_notes", "assignment_brief"]
+
+
+class SyllabusPrefillRequest(BaseModel):
+    text: str = Field(min_length=20, max_length=200_000)
+
+
+class SyllabusPrefillResponse(BaseModel):
+    title: str | None = None
+    course_code: str | None = None
+    field_of_study: str | None = None
+    term: str | None = None
+    instructor: str | None = None
+    meeting_schedule: str | None = None
 
 
 class SourceTextCreate(BaseModel):
@@ -123,3 +136,17 @@ class SourceListResponse(BaseModel):
 
 class SourcePurposeUpdate(BaseModel):
     purpose: SourcePurpose
+
+
+class SourceChunkResponse(BaseModel):
+    id: str
+    source_id: str
+    ordinal: int
+    page_number: int | None = None
+    text: str
+
+
+class SourceChunkListResponse(BaseModel):
+    source_id: str
+    source_title: str
+    items: list[SourceChunkResponse]

@@ -6,10 +6,12 @@ export function QAPanel({
   items,
   evidence,
   onFeedback,
+  projectId,
 }: {
   items: { question: string; answer: string }[];
   evidence?: ReviewerEvidenceItem[];
   onFeedback?: (index: number, rating: ReviewerFeedbackRating) => Promise<void>;
+  projectId?: string;
 }) {
   return (
     <div className="space-y-4">
@@ -25,6 +27,7 @@ export function QAPanel({
             <EvidenceCitations
               evidence={evidence?.[index]}
               onFeedback={onFeedback ? (rating) => onFeedback(index, rating) : undefined}
+              projectId={projectId}
             />
           </CardContent>
         </Card>

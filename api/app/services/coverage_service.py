@@ -12,7 +12,7 @@ from typing import Iterable
 
 from sqlalchemy.orm import Session
 
-from app.db.models import CourseObligation, NotebookCard, QuizAttempt
+from app.db.models import CourseObligation, NotebookCard, QuizAttempt, Source, SourceChunk
 
 
 # Weight newer attempts more heavily. Half-life of ~14 days keeps stale
@@ -39,6 +39,27 @@ def _normalize_topics(values) -> list[str]:
             continue
         seen.add(n)
         out.append(n)
+    return out
+
+
+def _normalize_weights(values, topics: list[str]) -> dict[str, float]:
+    """Return a {topic: weight} dict scoped to known topics, with non-negative
+    values. Empty dict if no usable weights are provided."""
+    if not isinstance(values, dict):
+        return {}
+    topic_set = set(topics)
+    out: dict[str, float] = {}
+    for k, v in values.items():
+        n = _topic_norm(k)
+        if not n or n not in topic_set:
+            continue
+        try:
+            w = float(v)
+        except (TypeError, ValueError):
+            continue
+        if w < 0:
+            continue
+        out[n] = w
     return out
 
 
@@ -84,6 +105,7 @@ def compute_obligation_readiness(
     """
     today = date.today()
     topics = _normalize_topics(obligation.topics)
+    weights = _normalize_weights(obligation.topic_weights, topics)
 
     # Pull recent attempts for this project.
     cutoff_iso = (today - timedelta(days=_LOOKBACK_DAYS)).isoformat()
@@ -141,7 +163,10 @@ def compute_obligation_readiness(
     topic_rows: list[dict] = []
     weighted_sum_attempts = 0.0
     weighted_sum_correct = 0.0
+    weighted_score_total = 0.0
+    weighted_score_basis = 0.0
     untested_topics = 0
+    has_weights = bool(weights)
     for topic in topics:
         attempts_w = weighted_attempts.get(topic, 0.0)
         correct_w = weighted_correct.get(topic, 0.0)
@@ -159,6 +184,18 @@ def compute_obligation_readiness(
             untested_topics += 1
         weighted_sum_attempts += attempts_w
         weighted_sum_correct += correct_w
+        # Exam-weighted readiness: weighted average of per-topic readiness
+        # scores, using syllabus weights. Untested topics count as 0 readiness
+        # against their weight share so the exam readiness reflects gaps.
+        weight = weights.get(topic, 0.0) if has_weights else 0.0
+        if has_weights and weight > 0:
+            weighted_score_total += weight * (readiness or 0)
+            weighted_score_basis += weight
+        # Study priority for the prioritized reviewer (G4): combine syllabus
+        # weight with how far readiness is from mastery. Untested topics get a
+        # neutral 50% gap so they don't dominate over confirmed weak topics.
+        gap = 1.0 - ((readiness or 50) / 100.0)
+        priority_rank = round((weight if has_weights else 1.0) * gap, 4)
         topic_rows.append(
             {
                 "topic": topic,
@@ -168,6 +205,8 @@ def compute_obligation_readiness(
                 "cards_due": cards_by_topic_due.get(topic, 0),
                 "cards_total": cards_by_topic_total.get(topic, 0),
                 "coverage": coverage,
+                "weight_percent": round(weight, 2) if has_weights else None,
+                "study_priority_rank": priority_rank,
             }
         )
 
@@ -176,10 +215,26 @@ def compute_obligation_readiness(
     else:
         overall = None
 
+    # Exam readiness (G5): weighted by syllabus topic weights when available.
+    # When weights are missing, fall back to the unweighted recall accuracy.
+    if has_weights and weighted_score_basis > 0:
+        exam_readiness: int | None = round(weighted_score_total / weighted_score_basis)
+    else:
+        exam_readiness = overall
+
+    # Prioritized reviewer (G4): order topics by study_priority_rank desc.
+    prioritized = sorted(
+        topic_rows, key=lambda row: row["study_priority_rank"], reverse=True
+    )
+    review_order = [row["topic"] for row in prioritized]
+
     return {
         "obligation_id": obligation.id,
         "topics": topic_rows,
         "overall_readiness_percent": overall,
+        "exam_readiness_percent": exam_readiness,
+        "has_weights": has_weights,
+        "review_order": review_order,
         "topics_total": len(topics),
         "topics_untested": untested_topics,
     }
@@ -295,4 +350,96 @@ def compute_project_coverage(
         "topics_total": total_topics,
         "topics_untested": total_untested,
         "obligations_count": len(upcoming),
+    }
+
+
+def compute_source_topic_coverage(
+    db: Session,
+    *,
+    obligation: CourseObligation,
+) -> dict:
+    """Map each obligation topic to the processed sources that mention it.
+
+    Lightweight substring scan across source chunks. The intent is the
+    Phase G3 "covered / weak / missing" view: students see which uploads
+    actually contain material on each expected topic, and which topics
+    have no covering source yet.
+    """
+    topics = _normalize_topics(obligation.topics)
+    sources = (
+        db.query(Source)
+        .filter(
+            Source.project_id == obligation.project_id,
+            Source.status == "processed",
+        )
+        .all()
+    )
+    sources_by_id = {s.id: s for s in sources}
+    if not topics or not sources_by_id:
+        return {
+            "obligation_id": obligation.id,
+            "topics": [
+                {
+                    "topic": t,
+                    "covered": False,
+                    "match_count": 0,
+                    "sources": [],
+                }
+                for t in topics
+            ],
+            "covered_count": 0,
+            "missing_topics": list(topics),
+        }
+
+    chunks = (
+        db.query(SourceChunk)
+        .filter(SourceChunk.source_id.in_(sources_by_id))
+        .all()
+    )
+    # Aggregate match counts per (source, topic).
+    matches: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for chunk in chunks:
+        text = (chunk.text or "").lower()
+        if not text:
+            continue
+        for topic in topics:
+            if topic and topic in text:
+                matches[topic][chunk.source_id] += 1
+
+    topic_rows: list[dict] = []
+    covered_count = 0
+    missing: list[str] = []
+    for topic in topics:
+        per_source = matches.get(topic, {})
+        sources_list = [
+            {
+                "source_id": sid,
+                "title": sources_by_id[sid].title,
+                "purpose": sources_by_id[sid].purpose,
+                "match_count": count,
+            }
+            for sid, count in sorted(
+                per_source.items(), key=lambda kv: (-kv[1], kv[0])
+            )
+        ]
+        total_matches = sum(per_source.values())
+        covered = total_matches > 0
+        if covered:
+            covered_count += 1
+        else:
+            missing.append(topic)
+        topic_rows.append(
+            {
+                "topic": topic,
+                "covered": covered,
+                "match_count": total_matches,
+                "sources": sources_list,
+            }
+        )
+
+    return {
+        "obligation_id": obligation.id,
+        "topics": topic_rows,
+        "covered_count": covered_count,
+        "missing_topics": missing,
     }

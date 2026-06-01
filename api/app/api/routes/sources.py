@@ -30,11 +30,21 @@ from app.schemas.source import (
     SourceResponse,
     SourceListResponse,
     SourcePurposeUpdate,
+    SourceChunkListResponse,
+    SyllabusPrefillRequest,
+    SyllabusPrefillResponse,
 )
 from app.core.security import validate_url_safe
 from app.services import storage_service
 from app.services.pdf_service import extract_pdf_pages
 from app.services.source_chunk_service import index_source_chunks
+from app.services.syllabus_prefill_service import extract_syllabus_metadata
+from app.services.usage_service import (
+    check_daily_cap,
+    check_monthly_quota,
+    lock_quota_for_user,
+    record_usage,
+)
 from app.services.validation_service import (
     validate_pdf_bytes,
     validate_pdf_structure,
@@ -63,6 +73,23 @@ def _truncate_pages(page_texts: list[tuple[int, str]], limit: int) -> list[tuple
             truncated.append((page_number, text_slice))
             remaining -= len(text_slice)
     return truncated
+
+
+@router.post("/syllabus/prefill", response_model=SyllabusPrefillResponse)
+@limiter.limit("10/hour;30/day")
+def prefill_from_syllabus(
+    request: Request,
+    payload: SyllabusPrefillRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Best-effort extract course fields from pasted syllabus text (pre-project)."""
+    lock_quota_for_user(current_user.user_id, db)
+    check_daily_cap(current_user.user_id, db)
+    check_monthly_quota(current_user.user_id, db)
+    metadata, usage = extract_syllabus_metadata(payload.text)
+    record_usage(db=db, user_id=current_user.user_id, job_id=None, **usage)
+    return SyllabusPrefillResponse(**metadata)
 
 
 def _source_to_dict(source: Source):
@@ -353,6 +380,45 @@ def get_source(
     require_owner(current_user, project.user_id if project else None)
 
     return _source_to_dict(source)
+
+
+@router.get(
+    "/sources/item/{source_id}/chunks",
+    response_model=SourceChunkListResponse,
+)
+@limiter.limit("120/hour")
+def list_source_chunks(
+    request: Request,
+    source_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    source = db.get(Source, source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    project = db.get(Project, source.project_id)
+    require_owner(current_user, project.user_id if project else None)
+
+    chunks = (
+        db.query(SourceChunk)
+        .filter(SourceChunk.source_id == source_id)
+        .order_by(SourceChunk.ordinal.asc())
+        .all()
+    )
+    return {
+        "source_id": source.id,
+        "source_title": source.title,
+        "items": [
+            {
+                "id": chunk.id,
+                "source_id": chunk.source_id,
+                "ordinal": chunk.ordinal,
+                "page_number": chunk.page_number,
+                "text": chunk.text,
+            }
+            for chunk in chunks
+        ],
+    }
 
 
 @router.patch("/sources/{source_id}/purpose", response_model=SourceResponse)

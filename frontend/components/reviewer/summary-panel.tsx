@@ -6,10 +6,12 @@ export function SummaryPanel({
   summary,
   evidence,
   onFeedback,
+  projectId,
 }: {
   summary: string;
   evidence?: ReviewerEvidenceItem;
   onFeedback?: (rating: ReviewerFeedbackRating) => Promise<void>;
+  projectId?: string;
 }) {
   return (
     <Card className="rounded-2xl border bg-slate-50 shadow-none">
@@ -18,7 +20,7 @@ export function SummaryPanel({
       </CardHeader>
       <CardContent>
         <p className="max-w-3xl text-sm leading-7 text-slate-700">{summary}</p>
-        <EvidenceCitations evidence={evidence} onFeedback={onFeedback} />
+        <EvidenceCitations evidence={evidence} onFeedback={onFeedback} projectId={projectId} />
       </CardContent>
     </Card>
   );

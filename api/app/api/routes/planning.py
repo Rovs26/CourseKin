@@ -47,14 +47,19 @@ from app.schemas.planning import (
     TaskStatsResponse,
     ObligationTopicsUpdateRequest,
     ObligationReadinessResponse,
+    ObligationSourceCoverageResponse,
     ProjectCoverageResponse,
 )
 from app.services.generation_guard_service import require_generation_challenge
 from app.services.coverage_service import (
     compute_obligation_readiness,
     compute_project_coverage,
+    compute_source_topic_coverage,
 )
-from app.services.preparation_service import rebuild_preparation_plan
+from app.services.preparation_service import (
+    TASK_MINUTES_BY_PRIORITY,
+    rebuild_preparation_plan,
+)
 from app.services.task_extraction_service import extract_tasks_from_input
 from app.services.usage_service import (
     check_daily_cap,
@@ -88,6 +93,7 @@ def _obligation_to_dict(item: CourseObligation) -> dict:
         "confidence": item.confidence,
         "uncertain_fields": item.uncertain_fields or [],
         "topics": item.topics or [],
+        "topic_weights": item.topic_weights or None,
         "status": item.status,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
@@ -321,6 +327,23 @@ def _runway_to_dict(
         if item.status != "skipped":
             day_totals[item.scheduled_date]["minutes"] += item.estimated_minutes
             day_totals[item.scheduled_date]["count"] += 1
+    # Workload balance: surface open course tasks against the same daily
+    # capacity so students see the realistic minutes already booked for a day.
+    open_tasks = (
+        db.query(CourseTask)
+        .filter(
+            CourseTask.project_id == project_id,
+            CourseTask.status == "open",
+            CourseTask.due_date.isnot(None),
+        )
+        .all()
+    )
+    for task in open_tasks:
+        if not task.due_date:
+            continue
+        minutes = TASK_MINUTES_BY_PRIORITY.get(task.priority, 30)
+        day_totals[task.due_date]["minutes"] += minutes
+        day_totals[task.due_date]["count"] += 1
     daily_load = [
         {
             "date": item_date,
@@ -1494,3 +1517,23 @@ def get_project_coverage(
     return compute_project_coverage(
         db, project_id=project_id, user_id=current_user.user_id
     )
+
+
+@router.get(
+    "/projects/{project_id}/planning/obligations/{obligation_id}/source-coverage",
+    response_model=ObligationSourceCoverageResponse,
+)
+def get_obligation_source_coverage(
+    project_id: str,
+    obligation_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Per-topic source coverage map: which uploaded sources mention each
+    expected topic. Surfaces topics with no covering material so the student
+    knows what is missing before the deadline."""
+    _require_owned_project(db, project_id, current_user)
+    obligation = db.get(CourseObligation, obligation_id)
+    if not obligation or obligation.project_id != project_id:
+        raise HTTPException(status_code=404, detail="Obligation not found")
+    return compute_source_topic_coverage(db, obligation=obligation)

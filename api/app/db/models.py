@@ -123,6 +123,8 @@ class QuizAttempt(Base):
     correct_answers: Mapped[int] = mapped_column(Integer, nullable=False)
     score_percent: Mapped[int] = mapped_column(Integer, nullable=False)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
@@ -141,6 +143,7 @@ class CourseObligation(Base):
     uncertain_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
     topics: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    topic_weights: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     proposal_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     reviewed_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     reviewed_at: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -187,6 +190,49 @@ class CourseTask(Base):
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
+class PlannerBlock(Base):
+    """A time-blocked entry from the natural-language day planner.
+
+    Unlike CourseTask, a block carries a time-of-day and duration, and is NOT
+    tied to a course (project_id is optional) so personal items like "exercise"
+    or "do a shop" can live alongside study time on the same timetable.
+    """
+
+    __tablename__ = "planner_blocks"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    project_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # kind: study | review | exercise | errand | personal | other
+    kind: Mapped[str] = mapped_column(String, nullable=False, default="personal")
+    scheduled_date: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    # HH:MM 24h local; nullable for all-day / unscheduled intentions.
+    start_time: Mapped[str | None] = mapped_column(String, nullable=True)
+    duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="planned")
+    origin: Mapped[str] = mapped_column(String, nullable=False, default="planner")
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class UserCalendarToken(Base):
+    """Per-user secret that authenticates the read-only .ics subscription feed.
+
+    Calendar apps (Apple/Google Calendar) cannot send a Clerk bearer token, so
+    the feed is authenticated by an unguessable token embedded in the URL. The
+    token can be rotated to revoke an old subscription URL.
+    """
+
+    __tablename__ = "user_calendar_tokens"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    token: Mapped[str] = mapped_column(String, nullable=False, unique=True, index=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class TaskFocusSession(Base):
     __tablename__ = "task_focus_sessions"
 
@@ -207,6 +253,9 @@ class NotebookCard(Base):
     user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     source_stream_entry_id: Mapped[str | None] = mapped_column(
+        String, nullable=True, index=True
+    )
+    source_audio_entry_id: Mapped[str | None] = mapped_column(
         String, nullable=True, index=True
     )
     origin: Mapped[str] = mapped_column(String, nullable=False, default="manual")
@@ -246,6 +295,7 @@ class CourseStreamEntry(Base):
     coaching_evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     coaching_job_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     coaching_generated_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    audio_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -323,3 +373,54 @@ class WebhookEvent(Base):
     provider: Mapped[str] = mapped_column(String, nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String, nullable=False)
     processed_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class UserAudioConsent(Base):
+    """Audit log for explicit acknowledgement of the audio recording consent
+    statement. Used by Audio E1 to gate uploads/recording behind a per-version
+    click-through and to give the user (and us) a verifiable record."""
+
+    __tablename__ = "user_audio_consents"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    consent_version: Mapped[str] = mapped_column(String, nullable=False)
+    accepted_at: Mapped[str] = mapped_column(String, nullable=False)
+    accepted_user_agent: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class MockExamSession(Base):
+    """Timed practice exam (Phase I).
+
+    Questions are sampled from a project's reviewer quiz items, weighted by the
+    parent obligation's topic_weights (G1) and biased toward topics where the
+    student has historically performed poorly. Stored as a JSON snapshot so the
+    exam stays reproducible even if the underlying reviewer content changes."""
+
+    __tablename__ = "mock_exam_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    project_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    obligation_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    difficulty: Mapped[str] = mapped_column(String, nullable=False)
+    target_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    question_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    questions: Mapped[list] = mapped_column(JSON, nullable=False)
+    answers: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    per_topic_results: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # qid -> "correct" | "incorrect" | "unverified" (free-text the grader can't
+    # auto-confirm waits on the student's self-grade rather than being marked wrong).
+    per_question_results: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    correct_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    score_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    started_at: Mapped[str] = mapped_column(String, nullable=False)
+    deadline_at: Mapped[str] = mapped_column(String, nullable=False)
+    submitted_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    confidence_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)

@@ -7,10 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   getObligationReadiness,
+  getObligationSourceCoverage,
   getProjectCoverage,
   updateObligationTopics,
   type CoverageBucket,
   type ObligationReadiness,
+  type ObligationSourceCoverage,
   type ProjectCoverage,
 } from "@/lib/coursekin-api";
 
@@ -42,6 +44,8 @@ function ObligationCoverageDetail({
   obligationId: string;
 }) {
   const [readiness, setReadiness] = useState<ObligationReadiness | null>(null);
+  const [sourceCoverage, setSourceCoverage] =
+    useState<ObligationSourceCoverage | null>(null);
   const [topicsInput, setTopicsInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,9 +54,13 @@ function ObligationCoverageDetail({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getObligationReadiness(projectId, obligationId);
-      setReadiness(data);
-      setTopicsInput(data.topics.map((row) => row.topic).join(", "));
+      const [readinessData, coverageData] = await Promise.all([
+        getObligationReadiness(projectId, obligationId),
+        getObligationSourceCoverage(projectId, obligationId),
+      ]);
+      setReadiness(readinessData);
+      setSourceCoverage(coverageData);
+      setTopicsInput(readinessData.topics.map((row) => row.topic).join(", "));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load readiness.");
     } finally {
@@ -101,11 +109,43 @@ function ObligationCoverageDetail({
         </Button>
       </div>
 
+      {readiness && readiness.has_weights && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900">
+          <p className="font-semibold uppercase tracking-wide">
+            Exam readiness (weighted)
+          </p>
+          <p className="mt-1 text-lg font-semibold">
+            {readinessLabel(readiness.exam_readiness_percent)}
+          </p>
+          <p className="mt-1 text-[11px] text-violet-800">
+            Weighted by syllabus topic percentages. Untested topics count as
+            zero against their weight share.
+          </p>
+        </div>
+      )}
+
+      {readiness && readiness.review_order.length > 0 && (
+        <div className="rounded-xl bg-slate-50 p-3 text-xs">
+          <p className="font-semibold uppercase tracking-wide text-slate-600">
+            Suggested review order
+          </p>
+          <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-slate-800">
+            {readiness.review_order.slice(0, 5).map((topic) => (
+              <li key={topic}>{topic}</li>
+            ))}
+          </ol>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Higher syllabus weight and lower current readiness rank earlier.
+          </p>
+        </div>
+      )}
+
       {readiness && readiness.topics.length > 0 && (
         <table className="w-full text-xs">
           <thead className="text-left text-slate-500">
             <tr>
               <th className="pb-2">Topic</th>
+              <th className="pb-2">Weight</th>
               <th className="pb-2">Readiness</th>
               <th className="pb-2">Cards due</th>
               <th className="pb-2">Coverage</th>
@@ -115,6 +155,11 @@ function ObligationCoverageDetail({
             {readiness.topics.map((row) => (
               <tr key={row.topic} className="border-t border-slate-100">
                 <td className="py-1.5">{row.topic}</td>
+                <td className="py-1.5">
+                  {row.weight_percent === null
+                    ? "—"
+                    : `${Math.round(row.weight_percent)}%`}
+                </td>
                 <td className="py-1.5">{readinessLabel(row.readiness_percent)}</td>
                 <td className="py-1.5">
                   {row.cards_due}/{row.cards_total}
@@ -129,6 +174,56 @@ function ObligationCoverageDetail({
           </tbody>
         </table>
       )}
+
+      {sourceCoverage && sourceCoverage.topics.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            Material coverage map
+          </p>
+          {sourceCoverage.missing_topics.length > 0 && (
+            <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+              No material covers: {sourceCoverage.missing_topics.join(", ")}
+            </p>
+          )}
+          <ul className="space-y-1.5">
+            {sourceCoverage.topics.map((row) => (
+              <li
+                key={row.topic}
+                className="flex items-start justify-between gap-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <p
+                    className={
+                      row.covered
+                        ? "font-medium text-slate-800"
+                        : "font-medium text-rose-700"
+                    }
+                  >
+                    {row.topic}
+                  </p>
+                  {row.sources.length > 0 ? (
+                    <p className="truncate text-[11px] text-slate-500">
+                      {row.sources
+                        .slice(0, 3)
+                        .map((s) => `${s.title} (${s.match_count})`)
+                        .join(", ")}
+                      {row.sources.length > 3
+                        ? `, +${row.sources.length - 3} more`
+                        : ""}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-rose-600">No source matches yet</p>
+                  )}
+                </div>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                  {row.match_count}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {error && <p className="text-xs text-rose-600">{error}</p>}
     </div>
   );

@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { CookieBanner } from "@/components/cookie-banner";
+import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
 import "./globals.css";
 
 const inter = Inter({
@@ -13,6 +14,24 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "CourseKin",
   description: "Generate study reviewers from your notes, PDFs, and links",
+  applicationName: "CourseKin",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "CourseKin",
+  },
+  icons: {
+    icon: "/icons/icon.svg",
+    apple: "/icons/icon.svg",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f5ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#161a17" },
+  ],
 };
 
 const themeScript = `
@@ -63,6 +82,7 @@ export default function RootLayout({
           <script dangerouslySetInnerHTML={{ __html: themeScript }} />
           {children}
           <CookieBanner />
+          <ServiceWorkerRegister />
         </body>
       </html>
     </ClerkProvider>

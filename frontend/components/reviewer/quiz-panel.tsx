@@ -37,6 +37,8 @@ export function QuizPanel({
   const [startedAt, setStartedAt] = useState(() => Date.now());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confidenceBefore, setConfidenceBefore] = useState<number | null>(null);
+  const [confidenceAfter, setConfidenceAfter] = useState<number | null>(null);
   const practiceEnabled = Boolean(projectId && reviewerVersion !== undefined);
   const answeredCount = Object.keys(answers).length;
   const canSubmit = quiz.length > 0 && answeredCount === quiz.length && !attempt;
@@ -53,6 +55,8 @@ export function QuizPanel({
           selected_answer: answers[index]!,
         })),
         duration_seconds: Math.max(1, Math.round((Date.now() - startedAt) / 1000)),
+        ...(confidenceBefore !== null ? { confidence_before: confidenceBefore } : {}),
+        ...(confidenceAfter !== null ? { confidence_after: confidenceAfter } : {}),
       });
       setAttempt(result);
       onAttemptSaved?.();
@@ -68,7 +72,35 @@ export function QuizPanel({
     setAttempt(null);
     setError(null);
     setStartedAt(Date.now());
+    setConfidenceBefore(null);
+    setConfidenceAfter(null);
   };
+
+  const renderConfidenceRow = (
+    value: number | null,
+    onPick: (next: number) => void,
+    disabled = false,
+  ) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-slate-500">Not confident</span>
+      {[1, 2, 3, 4, 5].map((level) => (
+        <button
+          key={level}
+          type="button"
+          disabled={disabled}
+          onClick={() => onPick(level)}
+          className={`h-9 w-9 rounded-full border text-sm font-medium transition ${
+            value === level
+              ? "border-[var(--ck-primary-border)] bg-[var(--ck-primary)] text-white"
+              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          } disabled:opacity-60`}
+        >
+          {level}
+        </button>
+      ))}
+      <span className="text-xs text-slate-500">Very confident</span>
+    </div>
+  );
 
   if (quiz.length === 0) {
     return <p className="text-sm text-slate-600">Build quiz questions to begin practice.</p>;
@@ -76,6 +108,20 @@ export function QuizPanel({
 
   return (
     <div className="space-y-4">
+      {practiceEnabled && !attempt && (
+        <Card className="rounded-2xl shadow-sm">
+          <CardContent className="space-y-2 p-4">
+            <p className="text-sm font-semibold text-slate-900">
+              How confident do you feel about this topic right now?
+            </p>
+            <p className="text-xs text-slate-500">
+              Optional. Helps you notice changes after practice.
+            </p>
+            {renderConfidenceRow(confidenceBefore, setConfidenceBefore, answeredCount > 0)}
+          </CardContent>
+        </Card>
+      )}
+
       {practiceEnabled && <Card className="rounded-2xl border-[var(--ck-primary-border)] bg-[var(--ck-primary-soft)] shadow-sm">
         <CardContent className="flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-center">
           <div>
@@ -181,6 +227,7 @@ export function QuizPanel({
                       <EvidenceCitations
                         evidence={result.evidence ?? evidence?.[index]}
                         onFeedback={onFeedback ? (rating) => onFeedback(index, rating) : undefined}
+                        projectId={projectId}
                       />
                     </div>
                   </div>
@@ -193,7 +240,7 @@ export function QuizPanel({
                     <div>
                       <p className="font-medium text-slate-900">Correct answer: {item.answer}</p>
                       <p className="mt-1 text-sm leading-6 text-slate-600">{item.rationale}</p>
-                      <EvidenceCitations evidence={evidence?.[index]} />
+                      <EvidenceCitations evidence={evidence?.[index]} projectId={projectId} />
                     </div>
                   </div>
                 </div>
@@ -203,6 +250,20 @@ export function QuizPanel({
         );
       })}
 
+      {practiceEnabled && !attempt && answeredCount === quiz.length && (
+        <Card className="rounded-2xl shadow-sm">
+          <CardContent className="space-y-2 p-4">
+            <p className="text-sm font-semibold text-slate-900">
+              How confident do you feel now?
+            </p>
+            <p className="text-xs text-slate-500">
+              Optional. Saved with this attempt so you can see confidence vs. score over time.
+            </p>
+            {renderConfidenceRow(confidenceAfter, setConfidenceAfter)}
+          </CardContent>
+        </Card>
+      )}
+
       {practiceEnabled && !attempt && (
         <div className="space-y-2">
           <Button onClick={submit} disabled={!canSubmit || isSubmitting} className="w-full sm:w-auto">
@@ -210,6 +271,21 @@ export function QuizPanel({
           </Button>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
+      )}
+
+      {attempt && (attempt.confidence_before !== null || attempt.confidence_after !== null) && (
+        <Card className="rounded-2xl shadow-sm">
+          <CardContent className="space-y-1 p-4">
+            <p className="text-sm font-semibold text-slate-900">Confidence delta</p>
+            <p className="text-sm text-slate-600">
+              Before: {attempt.confidence_before ?? "—"} / 5
+              {" · "}After: {attempt.confidence_after ?? "—"} / 5
+              {attempt.confidence_before !== null &&
+                attempt.confidence_after !== null &&
+                ` · ${attempt.confidence_after - attempt.confidence_before >= 0 ? "+" : ""}${attempt.confidence_after - attempt.confidence_before}`}
+            </p>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

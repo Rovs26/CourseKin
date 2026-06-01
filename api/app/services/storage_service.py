@@ -98,6 +98,69 @@ def generate_presigned_put(user_id: str, filename: str, content_type: str, size_
     }
 
 
+def generate_presigned_put_audio(
+    user_id: str,
+    filename: str,
+    content_type: str,
+    size_bytes: int,
+    *,
+    max_bytes: int,
+) -> dict:
+    """Audio E1 variant of `generate_presigned_put`.
+
+    Audio uploads have a larger size budget than PDFs and live under a
+    separate key prefix so the R2 lifecycle policy can sweep them on its own
+    cadence (raw audio is short-lived per the design doc).
+    """
+    client = _get_client()
+    safe_name = "".join(
+        c if c.isalnum() or c in "._- " else "_" for c in filename
+    ).strip().replace(" ", "_")
+    if not safe_name:
+        safe_name = "lecture.m4a"
+    if size_bytes <= 0 or size_bytes > max_bytes:
+        raise HTTPException(status_code=413, detail="Audio file is too large")
+    key = f"audio-temp/{user_id}/{uuid4()}/{safe_name}"
+    try:
+        upload_url = client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": settings.R2_BUCKET_NAME,
+                "Key": key,
+                "ContentType": content_type,
+                "ContentLength": size_bytes,
+            },
+            ExpiresIn=settings.R2_PRESIGN_EXPIRY_SECONDS,
+        )
+    except Exception as exc:
+        logger.error("Failed to generate presigned PUT URL for audio: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to generate upload URL")
+    return {
+        "upload_url": upload_url,
+        "key": key,
+        "expires_in": settings.R2_PRESIGN_EXPIRY_SECONDS,
+    }
+
+
+def download_audio_to_bytes(key: str, max_bytes: int) -> bytes:
+    """Audio variant of `download_to_bytes` with caller-supplied size budget."""
+    client = _get_client()
+    try:
+        size = get_object_size(key)
+        if size > max_bytes:
+            raise HTTPException(status_code=413, detail="Audio file is too large")
+        response = client.get_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
+        body = response["Body"].read(max_bytes + 1)
+        if len(body) > max_bytes:
+            raise HTTPException(status_code=413, detail="Audio file is too large")
+        return body
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to download audio object %s from R2: %s", key, exc)
+        raise HTTPException(status_code=500, detail="Failed to retrieve audio file")
+
+
 def generate_presigned_get(key: str, expires_in: int = 3600) -> str:
     """Generate a presigned GET URL for temporary download access."""
     client = _get_client()

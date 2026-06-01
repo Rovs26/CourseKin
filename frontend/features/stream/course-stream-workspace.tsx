@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, BookmarkPlus, BookOpenCheck, CheckCircle2, CircleAlert, Lightbulb, MessageCircleQuestion, NotebookPen, Paperclip, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, BookmarkPlus, BookOpenCheck, CheckCircle2, ChevronDown, ChevronUp, CircleAlert, Lightbulb, MessageCircleQuestion, Mic, NotebookPen, Paperclip, ShieldCheck, Sparkles } from "lucide-react";
+import { AudioUploadPanel } from "@/features/stream/audio-upload-panel";
 import { EvidenceCitations } from "@/components/reviewer/evidence-citations";
 import { TurnstileWidget } from "@/components/reviewer/turnstile-widget";
 import { EmptyState } from "@/components/states/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -21,13 +23,16 @@ import { useCourseStream } from "@/hooks/use-course-stream";
 import { useObligations } from "@/hooks/use-obligations";
 import { useSources } from "@/hooks/use-sources";
 import {
+  acceptAudioCandidateCard,
   convertStreamEntryToCard,
   createCourseStreamEntry,
+  createSourceFromStreamEntries,
   deleteCourseStreamEntry,
   requestCourseAnswer,
   requestCourseworkCoaching,
   updateCourseConfusionStatus,
   updateCourseStreamEntry,
+  type AudioCandidateCard,
   type CoachingMode,
   type CourseAnswerMode,
   type CourseStreamEntry,
@@ -42,6 +47,7 @@ const ENTRY_LABELS: Record<CourseStreamEntryType, string> = {
   question: "Question",
   reflection: "Reflection",
   coaching: "Coursework guidance",
+  audio_transcript: "Lecture audio",
 };
 
 const ANSWER_MODE_LABELS: Record<CourseAnswerMode, string> = {
@@ -535,6 +541,181 @@ function CoachingEntryCard({
   );
 }
 
+function AudioTranscriptCard({
+  entry,
+  projectId,
+  onSaved,
+}: {
+  entry: CourseStreamEntry;
+  projectId: string;
+  onSaved: () => void;
+}) {
+  const payload = entry.audio_payload;
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [savedIndexes, setSavedIndexes] = useState<Set<number>>(new Set());
+  const [savingIndex, setSavingIndex] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const candidates: AudioCandidateCard[] = payload?.candidate_cards ?? [];
+
+  const saveCandidate = async (index: number, card: AudioCandidateCard) => {
+    setSavingIndex(index);
+    setError(null);
+    try {
+      await acceptAudioCandidateCard(projectId, entry.id, {
+        front: card.front,
+        back: card.back,
+        tag: card.tag ?? null,
+      });
+      setSavedIndexes((prev) => {
+        const next = new Set(prev);
+        next.add(index);
+        return next;
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not save card to notebook.",
+      );
+    } finally {
+      setSavingIndex(null);
+    }
+  };
+
+  const remove = async () => {
+    if (
+      !window.confirm(
+        "Delete this lecture entry? The transcript and summary will be removed.",
+      )
+    )
+      return;
+    setIsDeleting(true);
+    setError(null);
+    try {
+      await deleteCourseStreamEntry(projectId, entry.id);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete entry.");
+      setIsDeleting(false);
+    }
+  };
+
+  const durationLabel = (() => {
+    const seconds = payload?.duration_seconds ?? 0;
+    if (!seconds) return null;
+    const minutes = Math.round(seconds / 60);
+    return `${minutes} min`;
+  })();
+
+  return (
+    <div className="rounded-2xl border border-violet-200 bg-violet-50/40 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-violet-800">
+          <Mic className="h-3.5 w-3.5" />
+          {ENTRY_LABELS.audio_transcript}
+        </span>
+        <time className="text-xs text-slate-500" dateTime={entry.created_at}>
+          {formatTimestamp(entry.created_at)}
+        </time>
+      </div>
+      {payload?.audio_filename && (
+        <p className="mt-2 text-xs text-slate-600">
+          {payload.audio_filename}
+          {durationLabel && <span className="ml-2 text-slate-500">· {durationLabel}</span>}
+          {payload.language && (
+            <span className="ml-2 text-slate-500">· {payload.language}</span>
+          )}
+        </p>
+      )}
+      {payload?.language_warning && (
+        <p className="mt-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          {payload.language_warning}
+        </p>
+      )}
+      <div className="mt-3 rounded-xl border border-violet-200 bg-white p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-violet-800">
+          Notes-style summary
+        </p>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+          {entry.content || "(Summary unavailable.)"}
+        </p>
+      </div>
+      {payload?.transcript && (
+        <div className="mt-3">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowTranscript((prev) => !prev)}
+          >
+            {showTranscript ? (
+              <ChevronUp className="mr-2 h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="mr-2 h-3.5 w-3.5" />
+            )}
+            {showTranscript ? "Hide transcript" : "Show transcript"}
+          </Button>
+          {showTranscript && (
+            <div className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 text-xs leading-6 text-slate-700">
+              <p className="whitespace-pre-wrap">{payload.transcript}</p>
+            </div>
+          )}
+        </div>
+      )}
+      {candidates.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Proposed flashcards
+          </p>
+          <div className="mt-2 space-y-2">
+            {candidates.map((card, index) => {
+              const saved = savedIndexes.has(index);
+              return (
+                <div
+                  key={`${entry.id}-card-${index}`}
+                  className="rounded-xl border border-slate-200 bg-white p-3"
+                >
+                  <p className="text-sm font-medium text-slate-800">{card.front}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{card.back}</p>
+                  {card.tag && (
+                    <p className="mt-1 text-xs text-slate-500">Tag: {card.tag}</p>
+                  )}
+                  <div className="mt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => saveCandidate(index, card)}
+                      disabled={saved || savingIndex === index}
+                    >
+                      <BookmarkPlus className="mr-2 h-3.5 w-3.5" />
+                      {saved
+                        ? "In notebook"
+                        : savingIndex === index
+                          ? "Saving..."
+                          : "Save to notebook"}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={remove}
+          disabled={isDeleting}
+        >
+          {isDeleting ? "Deleting..." : "Delete"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function CourseworkCoachPanel({
   projectId,
   sources,
@@ -697,6 +878,45 @@ export function CourseStreamWorkspace({ projectId }: { projectId: string }) {
   const [turnstileToken, setTurnstileToken] = useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([]);
+  const [bundleTitle, setBundleTitle] = useState("");
+  const [bundling, setBundling] = useState(false);
+  const [bundleError, setBundleError] = useState<string | null>(null);
+  const [bundleSuccess, setBundleSuccess] = useState<string | null>(null);
+
+  const toggleSelectEntry = (entryId: string) => {
+    setSelectedEntryIds((current) =>
+      current.includes(entryId)
+        ? current.filter((id) => id !== entryId)
+        : [...current, entryId],
+    );
+  };
+
+  const bundleSelected = async () => {
+    if (selectedEntryIds.length === 0 || bundling) return;
+    setBundling(true);
+    setBundleError(null);
+    setBundleSuccess(null);
+    try {
+      const source = await createSourceFromStreamEntries(projectId, {
+        entry_ids: selectedEntryIds,
+        title: bundleTitle.trim() || undefined,
+      });
+      setBundleSuccess(
+        `Created source "${source.title}". Open Materials to generate from it.`,
+      );
+      setSelectedEntryIds([]);
+      setBundleTitle("");
+      setSelectionMode(false);
+    } catch (err) {
+      setBundleError(
+        err instanceof Error ? err.message : "Could not bundle selection.",
+      );
+    } finally {
+      setBundling(false);
+    }
+  };
   const openQuestions = entries.filter(
     (entry) => entry.entry_type === "question" && entry.confusion_status !== "resolved"
   );
@@ -901,16 +1121,78 @@ export function CourseStreamWorkspace({ projectId }: { projectId: string }) {
           turnstileReady={turnstileReady}
           onSubmitted={refetch}
         />
+        <AudioUploadPanel projectId={projectId} onSubmitted={refetch} />
         </div>
 
         <Card className="rounded-2xl shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle className="text-lg">Room timeline</CardTitle>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
-              {total} entr{total === 1 ? "y" : "ies"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
+                {total} entr{total === 1 ? "y" : "ies"}
+              </span>
+              {entries.some(
+                (entry) =>
+                  entry.entry_type !== "coaching" &&
+                  entry.entry_type !== "audio_transcript",
+              ) && (
+                <Button
+                  size="sm"
+                  variant={selectionMode ? "default" : "outline"}
+                  onClick={() => {
+                    setSelectionMode((prev) => !prev);
+                    setSelectedEntryIds([]);
+                    setBundleTitle("");
+                    setBundleError(null);
+                    setBundleSuccess(null);
+                  }}
+                >
+                  {selectionMode ? "Cancel selection" : "Select for bundle"}
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
+            {selectionMode && (
+              <div className="mb-4 space-y-3 rounded-2xl border border-[var(--ck-primary-border)] bg-[var(--ck-primary-soft)] p-4">
+                <p className="text-sm font-medium text-[var(--ck-ink)]">
+                  {selectedEntryIds.length} selected
+                </p>
+                <p className="text-xs text-slate-600">
+                  Bundle these entries into a single lecture-notes source you can generate study
+                  material from.
+                </p>
+                <Input
+                  value={bundleTitle}
+                  onChange={(event) => setBundleTitle(event.target.value)}
+                  placeholder="Optional source title"
+                  maxLength={200}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={bundleSelected}
+                    disabled={selectedEntryIds.length === 0 || bundling}
+                  >
+                    {bundling ? "Bundling..." : "Bundle into source"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSelectedEntryIds([])}
+                    disabled={bundling || selectedEntryIds.length === 0}
+                  >
+                    Clear selection
+                  </Button>
+                </div>
+                {bundleError && <p className="text-sm text-red-600">{bundleError}</p>}
+              </div>
+            )}
+            {bundleSuccess && !selectionMode && (
+              <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                {bundleSuccess}
+              </p>
+            )}
             {isLoading ? (
               <p className="text-sm text-slate-500">Loading course room...</p>
             ) : error ? (
@@ -927,17 +1209,29 @@ export function CourseStreamWorkspace({ projectId }: { projectId: string }) {
                     Showing the latest {entries.length} of {total} entries.
                   </p>
                 )}
-                {entries.map((entry) => (
-                  entry.entry_type === "coaching" ? (
-                    <CoachingEntryCard
-                      key={entry.id}
-                      entry={entry}
-                      projectId={projectId}
-                      onSaved={refetch}
-                    />
-                  ) : (
+                {entries.map((entry) => {
+                  if (entry.entry_type === "coaching") {
+                    return (
+                      <CoachingEntryCard
+                        key={entry.id}
+                        entry={entry}
+                        projectId={projectId}
+                        onSaved={refetch}
+                      />
+                    );
+                  }
+                  if (entry.entry_type === "audio_transcript") {
+                    return (
+                      <AudioTranscriptCard
+                        key={entry.id}
+                        entry={entry}
+                        projectId={projectId}
+                        onSaved={refetch}
+                      />
+                    );
+                  }
+                  const card = (
                     <StreamEntryCard
-                      key={entry.id}
                       entry={entry}
                       projectId={projectId}
                       sources={sources}
@@ -945,8 +1239,25 @@ export function CourseStreamWorkspace({ projectId }: { projectId: string }) {
                       turnstileReady={turnstileReady}
                       onSaved={refetch}
                     />
-                  )
-                ))}
+                  );
+                  if (!selectionMode) {
+                    return <div key={entry.id}>{card}</div>;
+                  }
+                  const checked = selectedEntryIds.includes(entry.id);
+                  return (
+                    <div key={entry.id} className="flex items-start gap-3">
+                      <label className="mt-4 flex cursor-pointer items-center">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleSelectEntry(entry.id)}
+                          className="h-4 w-4 accent-[var(--ck-primary)]"
+                        />
+                      </label>
+                      <div className="min-w-0 flex-1">{card}</div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

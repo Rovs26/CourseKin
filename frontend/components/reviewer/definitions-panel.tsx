@@ -13,10 +13,12 @@ export function DefinitionsPanel({
   definitions,
   evidence,
   onFeedback,
+  projectId,
 }: {
   definitions: { term: string; definition: string }[];
   evidence?: ReviewerEvidenceItem[];
   onFeedback?: (index: number, rating: ReviewerFeedbackRating) => Promise<void>;
+  projectId?: string;
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border bg-white">
@@ -36,6 +38,7 @@ export function DefinitionsPanel({
                 <EvidenceCitations
                   evidence={evidence?.[index]}
                   onFeedback={onFeedback ? (rating) => onFeedback(index, rating) : undefined}
+                  projectId={projectId}
                 />
               </TableCell>
             </TableRow>

@@ -28,8 +28,10 @@ class Settings(BaseSettings):
     # ── Cost controls / quotas ────────────────────────────────────────────────
     # Max USD spend per user per calendar month on the free tier
     FREE_TIER_MONTHLY_USD: float = 0.25
-    # Max USD spend per user per calendar month on a paid tier (Phase 11)
-    PAID_TIER_MONTHLY_USD: float = 5.00
+    # Max USD spend per user per calendar month on a paid tier (Phase 11).
+    # The ceiling caps DOLLARS, not minutes — this is the load-bearing worst-case
+    # cost control. Sized at $3.00 to protect margin on a budget paid tier.
+    PAID_TIER_MONTHLY_USD: float = 3.00
     # Hard character cap on extracted source text sent to OpenAI — ~12.5k tokens
     MAX_EXTRACTED_CHARS: int = 50_000
 
@@ -88,6 +90,18 @@ class Settings(BaseSettings):
     R2_ENDPOINT_URL: str = ""
     # Presigned PUT URL lifetime — 5 minutes is enough to complete any upload
     R2_PRESIGN_EXPIRY_SECONDS: int = 300
+
+    # ── Audio E1 (lecture transcription) ──────────────────────────────────────
+    # Feature flag — gated rollout. When False, all /audio/* endpoints 404.
+    AUDIO_E1_ENABLED: bool = False
+    # Whisper-1 + summary model. Whisper bills per minute, summary per token.
+    AUDIO_WHISPER_MODEL: str = "whisper-1"
+    AUDIO_SUMMARY_MODEL: str = "gpt-4o-mini"
+    # Hard caps per the Audio E1 design doc (§4).
+    AUDIO_MAX_FILE_BYTES: int = 100 * 1024 * 1024  # 100 MB
+    AUDIO_MAX_DURATION_SECONDS: int = 60 * 60  # 60 minutes
+    # Latest consent version. Bump to re-prompt every user.
+    AUDIO_CONSENT_VERSION: str = "2026-05-v1"
 
     @property
     def r2_configured(self) -> bool:

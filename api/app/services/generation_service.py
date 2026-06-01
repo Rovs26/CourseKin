@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import re
 import time
 
 from openai import OpenAI
@@ -8,7 +9,7 @@ from openai import OpenAI
 from app.core.config import settings
 from app.core.utils import utc_now_iso
 from app.db.database import SessionLocal
-from app.db.models import Job, Reviewer, GenerationCache
+from app.db.models import Job, Reviewer, GenerationCache, Source
 
 logger = logging.getLogger(__name__)
 
@@ -242,11 +243,60 @@ def _citation_ids(raw_entry: object) -> list[str]:
     return ids
 
 
+def _classify_source_kind(source_type: str | None, source_purpose: str | None) -> str:
+    """Categorize a source for evidence separation.
+
+    Returns one of:
+      - "web_reference"   : URL sources
+      - "student_notes"   : student-typed text where purpose hints at notes
+      - "course_material" : default for instructor-provided / uploaded reference
+    """
+    if source_type == "url":
+        return "web_reference"
+    if source_type == "text" and source_purpose == "lecture_notes":
+        return "student_notes"
+    return "course_material"
+
+
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+
+def _content_words(text: str) -> set[str]:
+    """Lowercase word tokens with trivially short ones dropped (rough stopword filter)."""
+    return {word for word in _WORD_RE.findall(text.lower()) if len(word) > 2}
+
+
+def _claim_overlap(claim_text: str, excerpt: str) -> float:
+    """Fraction of the claim's content words that also appear in the excerpt.
+
+    Used to tell a strong single-source citation (the excerpt actually contains
+    the claim's words) from a thin one (a lone short snippet that doesn't).
+    """
+    claim_words = _content_words(claim_text or "")
+    if not claim_words:
+        return 0.0
+    excerpt_words = _content_words(excerpt)
+    return len(claim_words & excerpt_words) / len(claim_words)
+
+
+def _claim_text_for(item: object) -> str:
+    """Best-effort claim text for a content item, which may be a plain string
+    (key_points) or a dict (definitions/qa/flashcards/quiz). Joins string values
+    so overlap scoring has the claim's words to match against."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        return " ".join(str(value) for value in item.values() if isinstance(value, str))
+    return str(item)
+
+
 def _evidence_entry(
     raw_entry: object,
     chunks_by_id: dict[str, dict],
     source_id: str,
     source_title: str,
+    source_kind: str = "course_material",
+    claim_text: str = "",
 ) -> dict:
     citations = []
     seen_ids: set[str] = set()
@@ -261,12 +311,27 @@ def _evidence_entry(
                 "chunk_id": chunk_id,
                 "source_id": source_id,
                 "source_title": source_title,
+                "source_kind": source_kind,
                 "page_number": chunk.get("page_number"),
                 "excerpt": excerpt[:320],
             }
         )
+    if not citations:
+        status = "not_found"
+    elif (
+        len(citations) == 1
+        and len(citations[0]["excerpt"]) < 120
+        and _claim_overlap(claim_text, citations[0]["excerpt"]) < 0.6
+    ):
+        # Thin support: a lone short passage that doesn't clearly contain the
+        # claim's words. Surfaces in UI as amber so students treat it as less
+        # defensible. A short citation that DOES contain the claim is still
+        # "supported" — length alone shouldn't demote a strong textual match.
+        status = "weak_support"
+    else:
+        status = "supported"
     return {
-        "status": "supported" if citations else "not_found",
+        "status": status,
         "citations": citations,
     }
 
@@ -277,6 +342,7 @@ def _normalize_evidence(
     source_id: str,
     source_title: str,
     prompt_chunks: list[dict],
+    source_kind: str = "course_material",
 ) -> dict:
     raw_evidence = content.get("_evidence")
     if not isinstance(raw_evidence, dict):
@@ -289,8 +355,14 @@ def _normalize_evidence(
             continue
         raw_section = raw_evidence.get(section)
         if section == "summary":
+            summary_value = content.get("summary")
             evidence[section] = _evidence_entry(
-                raw_section, chunks_by_id, source_id, source_title
+                raw_section,
+                chunks_by_id,
+                source_id,
+                source_title,
+                source_kind,
+                claim_text=summary_value if isinstance(summary_value, str) else "",
             )
             continue
 
@@ -304,6 +376,8 @@ def _normalize_evidence(
                 chunks_by_id,
                 source_id,
                 source_title,
+                source_kind,
+                claim_text=_claim_text_for(items[index]),
             )
             for index in range(len(items))
         ]
@@ -494,12 +568,18 @@ def run_generation_in_background(
                 content_json, usage_info = _call_openai(
                     source_material, resolved_sections, resolved_counts
                 )
+                source_record = db.get(Source, source_id)
+                source_kind = _classify_source_kind(
+                    getattr(source_record, "type", None),
+                    getattr(source_record, "purpose", None),
+                )
                 content_json = _normalize_evidence(
                     content_json,
                     resolved_sections,
                     source_id,
                     source_title,
                     prompt_chunks,
+                    source_kind,
                 )
             except Exception as e:
                 logger.error("Generation failed: job=%s error=%s", job_id, e)

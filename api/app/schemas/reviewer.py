@@ -31,6 +31,9 @@ class CitationItem(BaseModel):
     chunk_id: str
     source_id: str
     source_title: str
+    source_kind: Literal[
+        "course_material", "student_notes", "web_reference", "ai_explanation"
+    ] = "course_material"
     page_number: Optional[int] = None
     excerpt: str
 
@@ -170,6 +173,8 @@ class QuizAttemptRequest(BaseModel):
     reviewer_version: int = Field(ge=1)
     answers: list[QuizAttemptAnswerRequest] = Field(min_length=1, max_length=50)
     duration_seconds: Optional[int] = Field(default=None, ge=0, le=86400)
+    confidence_before: Optional[int] = Field(default=None, ge=1, le=5)
+    confidence_after: Optional[int] = Field(default=None, ge=1, le=5)
 
     @field_validator("answers")
     @classmethod
@@ -202,6 +207,8 @@ class QuizAttemptResponse(BaseModel):
     correct_answers: int
     score_percent: int
     duration_seconds: Optional[int] = None
+    confidence_before: Optional[int] = None
+    confidence_after: Optional[int] = None
     created_at: str
 
 
@@ -228,3 +235,23 @@ class QuizPracticeSummaryResponse(BaseModel):
     focus_topics: list[QuizFocusTopic]
     focus_questions: list[QuizAttemptResult]
     recent_attempts: list[QuizAttemptResponse]
+
+
+class NotebookChatRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    explanation_mode: Literal[
+        "standard", "simplified", "step_by_step", "example_first"
+    ] = "standard"
+    turnstile_token: Optional[str] = None
+
+
+class NotebookChatEvidence(BaseModel):
+    status: Literal["supported", "not_found"]
+    source_scope: Literal["course_materials_only"] = "course_materials_only"
+    citations: list[CitationItem] = Field(default_factory=list)
+
+
+class NotebookChatResponse(BaseModel):
+    answer_status: Literal["answered", "insufficient_evidence"]
+    answer_content: Optional[str] = None
+    answer_evidence: NotebookChatEvidence

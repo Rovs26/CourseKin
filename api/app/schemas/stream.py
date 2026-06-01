@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.schemas.source import SourcePurpose
 
 
-StreamEntryType = Literal["note", "question", "reflection", "coaching"]
+StreamEntryType = Literal["note", "question", "reflection", "coaching", "audio_transcript"]
 StreamCaptureType = Literal["note", "question", "reflection"]
 ConfusionStatus = Literal["open", "resolved"]
 CourseAnswerStatus = Literal["queued", "generating", "answered", "insufficient_evidence", "failed"]
@@ -42,6 +42,33 @@ class CourseStreamEntryWriteRequest(BaseModel):
         if len(unique_ids) > 10:
             raise ValueError("An entry can link at most 10 course materials")
         return unique_ids
+
+
+class StreamSourceFromEntriesRequest(BaseModel):
+    entry_ids: list[str] = Field(min_length=1, max_length=100)
+    title: str | None = None
+
+    @field_validator("entry_ids")
+    @classmethod
+    def dedupe_entry_ids(cls, value: list[str]) -> list[str]:
+        seen: list[str] = []
+        for entry_id in value:
+            entry_id = entry_id.strip()
+            if not entry_id:
+                raise ValueError("Entry IDs cannot be empty")
+            if entry_id not in seen:
+                seen.append(entry_id)
+        return seen
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        v = value.strip()
+        if not v:
+            return None
+        return v[:200]
 
 
 class CourseStreamLinkedSourceResponse(BaseModel):
@@ -87,6 +114,7 @@ class CourseStreamEntryResponse(BaseModel):
     coaching_evidence: CourseAnswerEvidenceResponse | None = None
     coaching_job_id: str | None = None
     coaching_generated_at: str | None = None
+    audio_payload: dict | None = None
     created_at: str
     updated_at: str
 

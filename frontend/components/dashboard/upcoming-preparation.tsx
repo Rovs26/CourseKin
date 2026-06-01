@@ -28,10 +28,12 @@ export function UpcomingPreparation() {
   const { reminders, total, isLoading, error } = usePreparationReminders();
 
   return (
-    <Card className="rounded-2xl shadow-sm">
+    <Card className="rounded-3xl border-white/60 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.18)]">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg text-slate-900">
-          <BellRing className="h-5 w-5 text-[var(--ck-primary)]" />
+          <span className="grid size-9 place-items-center rounded-2xl bg-[var(--ck-primary-soft)] text-[var(--ck-primary)]">
+            <BellRing className="size-4" />
+          </span>
           Next up
         </CardTitle>
         <p className="text-sm text-slate-500">
@@ -53,7 +55,7 @@ export function UpcomingPreparation() {
               <Link
                 key={item.milestone_id}
                 href={routes.projectPlanning(item.project_id)}
-                className="block rounded-xl border bg-slate-50 p-4 transition-colors hover:bg-[var(--ck-primary-soft)]"
+                className="block rounded-2xl border border-white/60 bg-slate-50 p-4 transition-colors hover:bg-[var(--ck-primary-soft)]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>

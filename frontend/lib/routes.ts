@@ -23,4 +23,8 @@ export const routes = {
   courseRoom: (courseId: string) => `/projects/${courseId}/stream`,
   coursePlan: (courseId: string) => `/projects/${courseId}/planning`,
   courseSettings: (courseId: string) => `/projects/${courseId}/settings`,
+  projectNotebook: (projectId: string) => `/projects/${projectId}/notebook`,
+  courseExams: (courseId: string) => `/projects/${courseId}/exams`,
+  courseExamSession: (courseId: string, examId: string) =>
+    `/projects/${courseId}/exams/${examId}`,
 };

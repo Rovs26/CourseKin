@@ -1,5 +1,6 @@
 import type { Project } from "@/types/project";
 import type {
+  ReviewerCitation,
   ReviewerEvidenceItem,
   ReviewerFeedbackRating,
   ReviewerOutput,
@@ -162,6 +163,7 @@ export type CourseObligation = {
   confidence: "high" | "medium" | "low";
   uncertain_fields: string[];
   topics: string[];
+  topic_weights: Record<string, number> | null;
   status: ObligationStatus;
   created_at: string;
   updated_at: string;
@@ -316,7 +318,26 @@ export type CalendarAgenda = {
 };
 
 export type CourseStreamCaptureType = "note" | "question" | "reflection";
-export type CourseStreamEntryType = CourseStreamCaptureType | "coaching";
+export type CourseStreamEntryType =
+  | CourseStreamCaptureType
+  | "coaching"
+  | "audio_transcript";
+
+export type AudioCandidateCard = {
+  front: string;
+  back: string;
+  tag: string | null;
+};
+
+export type AudioStreamPayload = {
+  transcript: string;
+  duration_seconds: number;
+  audio_filename: string;
+  language: string | null;
+  language_warning: string | null;
+  candidate_cards: AudioCandidateCard[];
+  job_id: string;
+};
 export type ConfusionStatus = "open" | "resolved";
 export type CourseAnswerMode = "standard" | "simplified" | "step_by_step" | "example_first";
 export type CourseAnswerStatus =
@@ -353,6 +374,8 @@ export type QuizAttempt = {
   correct_answers: number;
   score_percent: number;
   duration_seconds: number | null;
+  confidence_before: number | null;
+  confidence_after: number | null;
   created_at: string;
 };
 
@@ -425,6 +448,7 @@ export type CourseStreamEntry = {
   coaching_evidence: CourseEvidence | null;
   coaching_job_id: string | null;
   coaching_generated_at: string | null;
+  audio_payload: AudioStreamPayload | null;
   created_at: string;
   updated_at: string;
 };
@@ -550,10 +574,63 @@ export function listProjectSources(projectId: string) {
   });
 }
 
+export type SourceChunk = {
+  id: string;
+  source_id: string;
+  ordinal: number;
+  page_number: number | null;
+  text: string;
+};
+
+export type SourceChunkList = {
+  source_id: string;
+  source_title: string;
+  items: SourceChunk[];
+};
+
+export function getSource(sourceId: string) {
+  return apiRequest<Source>(`/sources/item/${sourceId}`, { method: "GET" });
+}
+
+export function listSourceChunks(sourceId: string) {
+  return apiRequest<SourceChunkList>(`/sources/item/${sourceId}/chunks`, {
+    method: "GET",
+  });
+}
+
+export function createSourceFromStreamEntries(
+  projectId: string,
+  input: { entry_ids: string[]; title?: string },
+) {
+  return apiRequest<Source>(
+    `/projects/${projectId}/stream/source-from-entries`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
 export function createTextSource(input: CreateTextSourceInput) {
   return apiRequest<Source>("/sources/text", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+export type SyllabusPrefill = {
+  title: string | null;
+  course_code: string | null;
+  field_of_study: string | null;
+  term: string | null;
+  instructor: string | null;
+  meeting_schedule: string | null;
+};
+
+export function prefillFromSyllabus(text: string) {
+  return apiRequest<SyllabusPrefill>("/syllabus/prefill", {
+    method: "POST",
+    body: JSON.stringify({ text }),
   });
 }
 
@@ -832,14 +909,40 @@ export type CoverageTopicRow = {
   cards_due: number;
   cards_total: number;
   coverage: CoverageBucket;
+  weight_percent: number | null;
+  study_priority_rank: number;
 };
 
 export type ObligationReadiness = {
   obligation_id: string;
   topics: CoverageTopicRow[];
   overall_readiness_percent: number | null;
+  exam_readiness_percent: number | null;
+  has_weights: boolean;
+  review_order: string[];
   topics_total: number;
   topics_untested: number;
+};
+
+export type SourceCoverageEntry = {
+  source_id: string;
+  title: string;
+  purpose: string;
+  match_count: number;
+};
+
+export type TopicSourceCoverageRow = {
+  topic: string;
+  covered: boolean;
+  match_count: number;
+  sources: SourceCoverageEntry[];
+};
+
+export type ObligationSourceCoverage = {
+  obligation_id: string;
+  topics: TopicSourceCoverageRow[];
+  covered_count: number;
+  missing_topics: string[];
 };
 
 export type ProjectCoverage = {
@@ -882,6 +985,16 @@ export function getObligationReadiness(projectId: string, obligationId: string) 
 export function getProjectCoverage(projectId: string) {
   return apiRequest<ProjectCoverage>(
     `/projects/${projectId}/planning/coverage`,
+    { method: "GET" }
+  );
+}
+
+export function getObligationSourceCoverage(
+  projectId: string,
+  obligationId: string,
+) {
+  return apiRequest<ObligationSourceCoverage>(
+    `/projects/${projectId}/planning/obligations/${obligationId}/source-coverage`,
     { method: "GET" }
   );
 }
@@ -1002,6 +1115,24 @@ export function getCalendarAgenda(startDate: string, endDate: string) {
     `/planning/calendar?start_date=${startDate}&end_date=${endDate}&reference_date=${localCalendarDate()}`,
     { method: "GET" }
   );
+}
+
+export interface CalendarSubscription {
+  token: string;
+  feed_url: string;
+  webcal_url: string;
+}
+
+export function getCalendarSubscription() {
+  return apiRequest<CalendarSubscription>("/calendar/subscription", {
+    method: "GET",
+  });
+}
+
+export function rotateCalendarSubscription() {
+  return apiRequest<CalendarSubscription>("/calendar/subscription/rotate", {
+    method: "POST",
+  });
 }
 
 export function listCourseStreamEntries(projectId: string) {
@@ -1129,12 +1260,46 @@ export function submitReviewerFeedback(
   });
 }
 
+export type NotebookChatMode =
+  | "standard"
+  | "simplified"
+  | "step_by_step"
+  | "example_first";
+
+export interface NotebookChatAnswer {
+  answer_status: "answered" | "insufficient_evidence";
+  answer_content: string | null;
+  answer_evidence: {
+    status: "supported" | "not_found";
+    source_scope: "course_materials_only";
+    citations: ReviewerCitation[];
+  };
+}
+
+export function askNotebookChat(
+  projectId: string,
+  question: string,
+  explanationMode: NotebookChatMode = "standard",
+  turnstileToken?: string
+) {
+  return apiRequest<NotebookChatAnswer>(`/projects/${projectId}/notebook/chat`, {
+    method: "POST",
+    body: JSON.stringify({
+      question,
+      explanation_mode: explanationMode,
+      turnstile_token: turnstileToken,
+    }),
+  });
+}
+
 export function submitQuizAttempt(
   projectId: string,
   input: {
     reviewer_version: number;
     answers: Array<{ item_index: number; selected_answer: string }>;
     duration_seconds?: number;
+    confidence_before?: number;
+    confidence_after?: number;
   }
 ) {
   return apiRequest<QuizAttempt>(`/projects/${projectId}/reviewer/quiz-attempts`, {
@@ -1310,5 +1475,331 @@ export function extractTaskProposals(
       method: "POST",
       body: JSON.stringify(payload),
     }
+  );
+}
+
+// ─── Natural-language day planner ────────────────────────────────────
+
+export type PlannerKind =
+  | "study"
+  | "review"
+  | "exercise"
+  | "errand"
+  | "personal"
+  | "other";
+export type PlannerTimeOfDay =
+  | "morning"
+  | "afternoon"
+  | "evening"
+  | "night"
+  | "any";
+export type PlannerBlockStatus = "planned" | "completed" | "skipped";
+
+export type PlannerSuggestion = {
+  title: string;
+  kind: PlannerKind;
+  scheduled_date: string;
+  start_time: string | null;
+  duration_minutes: number;
+  time_of_day: PlannerTimeOfDay;
+  notes: string | null;
+  conflict: boolean;
+};
+
+export type PlannerSuggestResponse = {
+  suggestions: PlannerSuggestion[];
+  model: string;
+  cost_usd: number;
+};
+
+export type PlannerBlock = {
+  id: string;
+  project_id: string | null;
+  title: string;
+  notes: string | null;
+  kind: PlannerKind;
+  scheduled_date: string;
+  start_time: string | null;
+  duration_minutes: number;
+  status: PlannerBlockStatus;
+  origin: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlannerBlockInput = {
+  title: string;
+  kind?: PlannerKind;
+  scheduled_date: string;
+  start_time?: string | null;
+  duration_minutes?: number;
+  notes?: string | null;
+  project_id?: string | null;
+};
+
+export function suggestPlan(payload: { text: string; turnstile_token?: string }) {
+  return apiRequest<PlannerSuggestResponse>("/planner/suggest", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type AssistantChatMode = "plan" | "reply";
+
+export type AssistantChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type AssistantChatResponse = {
+  mode: AssistantChatMode;
+  reply: string;
+  suggestions: PlannerSuggestion[];
+  model: string;
+  cost_usd: number;
+};
+
+export function chatWithAssistant(payload: {
+  message: string;
+  history?: AssistantChatMessage[];
+  turnstile_token?: string;
+}) {
+  return apiRequest<AssistantChatResponse>("/planner/chat", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createPlannerBlocks(blocks: PlannerBlockInput[]) {
+  return apiRequest<ListResponse<PlannerBlock>>("/planner/blocks", {
+    method: "POST",
+    body: JSON.stringify({ blocks }),
+  });
+}
+
+export function listPlannerBlocks(startDate?: string, endDate?: string) {
+  const params = new URLSearchParams();
+  if (startDate) params.set("start_date", startDate);
+  if (endDate) params.set("end_date", endDate);
+  const query = params.toString();
+  return apiRequest<ListResponse<PlannerBlock>>(
+    `/planner/blocks${query ? `?${query}` : ""}`,
+    { method: "GET" }
+  );
+}
+
+export function updatePlannerBlock(
+  blockId: string,
+  payload: Partial<{
+    title: string;
+    scheduled_date: string;
+    start_time: string | null;
+    duration_minutes: number;
+    status: PlannerBlockStatus;
+    notes: string | null;
+  }>
+) {
+  return apiRequest<PlannerBlock>(`/planner/blocks/${blockId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deletePlannerBlock(blockId: string) {
+  return apiRequest<void>(`/planner/blocks/${blockId}`, { method: "DELETE" });
+}
+
+// ─── Audio E1 (lecture transcription, behind feature flag) ───────────
+
+export type AudioConsentStatus = {
+  consent_required_version: string;
+  accepted_version: string | null;
+  accepted_at: string | null;
+  needs_consent: boolean;
+};
+
+export function getAudioConsentStatus(projectId: string) {
+  return apiRequest<AudioConsentStatus>(
+    `/projects/${projectId}/audio/consent`,
+    { method: "GET" }
+  );
+}
+
+export function acceptAudioConsent(
+  projectId: string,
+  payload: { consent_version: string; user_agent?: string }
+) {
+  return apiRequest<AudioConsentStatus>(
+    `/projects/${projectId}/audio/consent`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function createAudioUploadUrl(
+  projectId: string,
+  payload: { filename: string; content_type: string; size_bytes: number }
+) {
+  return apiRequest<{ upload_url: string; key: string; expires_in: number }>(
+    `/projects/${projectId}/audio/upload-url`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function startAudioTranscription(
+  projectId: string,
+  payload: {
+    storage_key: string;
+    original_filename: string;
+    turnstile_token?: string;
+  }
+) {
+  return apiRequest<{
+    id: string;
+    project_id: string;
+    job_type: string;
+    status: string;
+    stage: string;
+    created_at: string;
+    updated_at: string;
+    error_message: string | null;
+  }>(
+    `/projects/${projectId}/audio/transcribe`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function acceptAudioCandidateCard(
+  projectId: string,
+  entryId: string,
+  payload: { front: string; back: string; tag?: string | null },
+) {
+  return apiRequest<NotebookCard>(
+    `/projects/${projectId}/audio/entries/${entryId}/cards/accept`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+// ── Mock exams (Phase I) ────────────────────────────────────────────
+export type ExamDifficulty = "easy" | "medium" | "hard" | "mixed";
+export type ExamStatus = "in_progress" | "submitted" | "abandoned" | "expired";
+export type ExamQuestionType = "mcq" | "short_answer" | "fill_blank";
+
+export type ExamQuestion = {
+  id: string;
+  type: ExamQuestionType;
+  topic: string;
+  prompt: string;
+  choices: string[];
+  difficulty: "easy" | "medium" | "hard";
+  rationale?: string | null;
+  answer?: string;
+};
+
+export type ExamTopicResult = {
+  topic: string;
+  correct: number;
+  total: number;
+  accuracy_percent: number;
+};
+
+export type MockExamSummary = {
+  id: string;
+  project_id: string;
+  obligation_id: string | null;
+  title: string;
+  difficulty: ExamDifficulty;
+  target_minutes: number;
+  question_count: number;
+  total_count: number;
+  correct_count: number | null;
+  score_percent: number | null;
+  started_at: string;
+  deadline_at: string;
+  submitted_at: string | null;
+  status: ExamStatus;
+  confidence_before: number | null;
+  confidence_after: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type QuestionVerdict = "correct" | "incorrect" | "unverified";
+
+export type MockExamSession = MockExamSummary & {
+  questions: ExamQuestion[];
+  answers: Record<string, string>;
+  per_topic_results: ExamTopicResult[];
+  per_question_correct?: Record<string, boolean>;
+  per_question_verdict?: Record<string, QuestionVerdict>;
+  unverified_count?: number;
+  remedial_cards_created?: number;
+};
+
+export function createMockExam(
+  projectId: string,
+  payload: {
+    obligation_id?: string | null;
+    title?: string | null;
+    difficulty: ExamDifficulty;
+    target_minutes: number;
+    question_count: number;
+    confidence_before?: number | null;
+  },
+) {
+  return apiRequest<MockExamSession>(`/projects/${projectId}/exams`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listMockExams(projectId: string) {
+  return apiRequest<{ items: MockExamSummary[]; total: number }>(
+    `/projects/${projectId}/exams`,
+  );
+}
+
+export function getMockExam(projectId: string, examId: string) {
+  return apiRequest<MockExamSession>(
+    `/projects/${projectId}/exams/${examId}`,
+  );
+}
+
+export function submitMockExam(
+  projectId: string,
+  examId: string,
+  payload: { answers: Record<string, string>; confidence_after?: number | null },
+) {
+  return apiRequest<MockExamSession>(
+    `/projects/${projectId}/exams/${examId}/submit`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function selfGradeMockExam(
+  projectId: string,
+  examId: string,
+  payload: { question_id: string; verdict: "correct" | "incorrect" },
+) {
+  return apiRequest<MockExamSession>(
+    `/projects/${projectId}/exams/${examId}/self-grade`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
   );
 }

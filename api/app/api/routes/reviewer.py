@@ -18,18 +18,23 @@ from app.schemas.reviewer import (
     BatchGenerateRequest,
     BatchGenerateResponse,
     CustomPdfRequest,
+    NotebookChatRequest,
+    NotebookChatResponse,
     ReviewerFeedbackRequest,
     ReviewerFeedbackResponse,
     QuizAttemptRequest,
     QuizAttemptResponse,
     QuizPracticeSummaryResponse,
 )
+from app.services.course_answer_service import answer_question_now
 from app.services.generation_guard_service import require_generation_challenge
 from app.services.notebook_service import seed_remedial_cards_from_quiz_results
+from app.services.source_chunk_service import ensure_source_chunks, serialize_chunks
 from app.services.usage_service import (
     check_daily_cap,
     check_monthly_quota,
     lock_quota_for_user,
+    record_usage,
     reserve_usage,
 )
 from app.services.pdf_export_service import generate_reviewer_pdf
@@ -77,6 +82,8 @@ def _quiz_attempt_to_dict(attempt: QuizAttempt):
         "correct_answers": attempt.correct_answers,
         "score_percent": attempt.score_percent,
         "duration_seconds": attempt.duration_seconds,
+        "confidence_before": attempt.confidence_before,
+        "confidence_after": attempt.confidence_after,
         "created_at": attempt.created_at,
     }
 
@@ -298,6 +305,8 @@ def record_quiz_attempt(
         correct_answers=correct_answers,
         score_percent=round((correct_answers / len(results)) * 100),
         duration_seconds=payload.duration_seconds,
+        confidence_before=payload.confidence_before,
+        confidence_after=payload.confidence_after,
         created_at=now,
     )
     db.add(attempt)
@@ -759,3 +768,63 @@ def batch_generate_reviewer(
         status="processing",
         job_ids=job_ids,
     )
+
+
+@router.post(
+    "/projects/{project_id}/notebook/chat",
+    response_model=NotebookChatResponse,
+)
+@limiter.limit("20/hour;60/day;200/month")
+def notebook_chat(
+    request: Request,
+    project_id: str,
+    payload: NotebookChatRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Synchronous grounded Q&A over all of a course's processed materials.
+
+    Unlike the confusion-inbox flow this answers immediately (no job/polling) so
+    the notebook can feel like a chat. Answers are still cited to source chunks
+    and refuse when the materials don't support a reliable answer.
+    """
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    require_owner(current_user, project.user_id)
+
+    sources = (
+        db.query(Source)
+        .filter(
+            Source.project_id == project_id,
+            Source.status == "processed",
+        )
+        .order_by(Source.created_at.asc())
+        .all()
+    )
+    sources = [source for source in sources if (source.text or "").strip()]
+    if not sources:
+        raise HTTPException(
+            status_code=400,
+            detail="Add at least one processed course material before asking a question",
+        )
+
+    require_generation_challenge(request, payload.turnstile_token, current_user.user_id, db)
+    lock_quota_for_user(current_user.user_id, db)
+    check_daily_cap(user_id=current_user.user_id, db=db)
+    check_monthly_quota(user_id=current_user.user_id, db=db)
+
+    source_chunks: list[dict] = []
+    for source in sources:
+        for chunk in serialize_chunks(ensure_source_chunks(db, source)):
+            source_chunks.append({**chunk, "source_title": source.title})
+    db.commit()  # persist any chunks freshly indexed by ensure_source_chunks
+
+    answer, usage = answer_question_now(
+        payload.question.strip(),
+        source_chunks,
+        payload.explanation_mode,
+    )
+    record_usage(db=db, user_id=current_user.user_id, job_id=None, **usage)
+
+    return NotebookChatResponse(**answer)

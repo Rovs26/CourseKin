@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ArrowRight, FileCheck2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,7 +10,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/states/empty-state";
+import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 import { useProject } from "@/hooks/use-project";
 import { useReviewer } from "@/hooks/use-reviewer";
 import { useSources } from "@/hooks/use-sources";
@@ -28,8 +31,11 @@ export default function ProjectOverviewPage() {
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <p className="text-sm text-slate-500">Loading course overview...</p>
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-72 w-full rounded-2xl" />
+        <Skeleton className="h-72 w-full rounded-2xl" />
       </div>
     );
   }
@@ -92,8 +98,36 @@ export default function ProjectOverviewPage() {
     },
   ];
 
+  const showWhatsNext = counts.total === 0;
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+    <div className="space-y-6">
+      <OnboardingTour />
+      {showWhatsNext ? (
+        <Card className="rounded-3xl border border-white/50 bg-gradient-to-br from-violet-50 via-white to-sky-50 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.18)]">
+          <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <FileCheck2 className="mt-0.5 h-5 w-5 shrink-0 text-[var(--ck-primary)]" />
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  What&apos;s next: bring in your syllabus
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Add the syllabus PDF or paste text. We extract dates and topics so Plan can build your term.
+                </p>
+              </div>
+            </div>
+            <Button asChild className="shrink-0">
+              <Link href={`${routes.courseMaterials(project.id)}?add=syllabus&firstRun=1`}>
+                Add syllabus
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
       <Card className="rounded-2xl shadow-sm">
         <CardHeader>
           <CardTitle className="text-slate-900">Course Snapshot</CardTitle>
@@ -191,6 +225,7 @@ export default function ProjectOverviewPage() {
           </Button>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, FileCheck2 } from "lucide-react";
+import { ArrowRight, FileCheck2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
+import { toast } from "sonner";
 import { EmptyState } from "@/components/states/empty-state";
 import { SourceUploadPanel } from "@/components/sources/source-upload-panel";
 import { SourceList } from "@/components/sources/source-list";
@@ -32,6 +34,7 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
   const [isSubmittingUrl, setIsSubmittingUrl] = useState(false);
   const defaultPurpose: SourcePurpose =
     searchParams.get("add") === "syllabus" ? "syllabus" : "study_material";
+  const isFirstRun = searchParams.get("firstRun") === "1";
 
   const isLoading = isProjectLoading || isSourcesLoading;
 
@@ -59,10 +62,14 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
       });
 
       await refetchSources();
+      toast.success("Text material added", {
+        description: "We'll process it for citations and your notebook.",
+      });
     } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Failed to add text source."
-      );
+      const message =
+        err instanceof Error ? err.message : "Failed to add text source.";
+      setSubmitError(message);
+      toast.error("Could not add text", { description: message });
     } finally {
       setIsSubmittingText(false);
     }
@@ -85,10 +92,17 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
         setPdfUploadPct(pct);
       });
       await refetchSources();
+      toast.success("PDF uploaded", {
+        description:
+          purpose === "syllabus"
+            ? "We'll extract dates and topics next."
+            : "Indexing for citations now.",
+      });
     } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Failed to upload PDF."
-      );
+      const message =
+        err instanceof Error ? err.message : "Failed to upload PDF.";
+      setSubmitError(message);
+      toast.error("Upload failed", { description: message });
     } finally {
       setIsSubmittingPdf(false);
       setPdfUploadPct(null);
@@ -111,10 +125,14 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
         purpose,
       });
       await refetchSources();
+      toast.success("URL added", {
+        description: "Fetched and queued for processing.",
+      });
     } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Failed to add URL source."
-      );
+      const message =
+        err instanceof Error ? err.message : "Failed to add URL source.";
+      setSubmitError(message);
+      toast.error("Could not add URL", { description: message });
     } finally {
       setIsSubmittingUrl(false);
     }
@@ -122,8 +140,21 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <p className="text-sm text-slate-500">Loading materials...</p>
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-7 w-2/3" />
+          <Skeleton className="h-4 w-full max-w-xl" />
+        </div>
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <Skeleton className="h-72 w-full rounded-2xl" />
+          <div className="space-y-3">
+            <Skeleton className="h-12 w-full rounded-2xl" />
+            <Skeleton className="h-12 w-full rounded-2xl" />
+            <Skeleton className="h-12 w-full rounded-2xl" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -162,6 +193,25 @@ export function ProjectSourcesWorkspace({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
+      {isFirstRun && sources.length === 0 ? (
+        <div className="relative overflow-hidden rounded-2xl border border-white/40 bg-gradient-to-br from-violet-50 via-white to-sky-50 p-5 shadow-sm">
+          <div className="absolute inset-0 -z-10 bg-white/40 backdrop-blur-xl" />
+          <div className="flex items-start gap-3">
+            <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-violet-500" />
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                Welcome to your course
+              </p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Drop in your syllabus (PDF, URL, or pasted text) and tag it as
+                <strong className="mx-1">Course syllabus</strong>
+                so we can extract dates and topics. Notes and readings can come later.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ck-primary)]">
           Materials

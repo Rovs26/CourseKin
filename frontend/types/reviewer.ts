@@ -5,10 +5,17 @@ export type ReviewerFeedbackRating =
   | "unclear"
   | "incorrect";
 
+export type ReviewerCitationKind =
+  | "course_material"
+  | "student_notes"
+  | "web_reference"
+  | "ai_explanation";
+
 export interface ReviewerCitation {
   chunk_id: string;
   source_id: string;
   source_title: string;
+  source_kind?: ReviewerCitationKind;
   page_number?: number | null;
   excerpt: string;
 }

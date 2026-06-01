@@ -16,7 +16,10 @@ from app.schemas.stream import (
     CourseStreamEntryListResponse,
     CourseStreamEntryResponse,
     CourseStreamEntryWriteRequest,
+    StreamSourceFromEntriesRequest,
 )
+from app.schemas.source import SourceResponse
+from app.services.source_chunk_service import index_source_chunks
 from app.services.generation_guard_service import require_generation_challenge
 from app.services.usage_service import (
     check_daily_cap,
@@ -68,6 +71,7 @@ def _entry_to_dict(item: CourseStreamEntry, linked_sources: list[Source] | None 
         "coaching_evidence": item.coaching_evidence if item.entry_type == "coaching" else None,
         "coaching_job_id": item.coaching_job_id if item.entry_type == "coaching" else None,
         "coaching_generated_at": item.coaching_generated_at if item.entry_type == "coaching" else None,
+        "audio_payload": item.audio_payload if item.entry_type == "audio_transcript" else None,
         "created_at": item.created_at,
         "updated_at": item.updated_at,
     }
@@ -464,6 +468,78 @@ def request_coursework_coaching(
     db.commit()
     db.refresh(item)
     return _entry_to_dict(item, linked_sources)
+
+
+@router.post(
+    "/projects/{project_id}/stream/source-from-entries",
+    response_model=SourceResponse,
+)
+@limiter.limit("20/hour")
+def create_source_from_stream_entries(
+    request: Request,
+    project_id: str,
+    payload: StreamSourceFromEntriesRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Compile selected course-stream entries into a text source the reviewer
+    generator can use. Keeps stream content private to the student while still
+    letting them generate summaries / flashcards / quizzes from their own
+    captured notes and reflections."""
+    project = _require_owned_project(db, project_id, current_user)
+
+    entries = (
+        db.query(CourseStreamEntry)
+        .filter(
+            CourseStreamEntry.id.in_(payload.entry_ids),
+            CourseStreamEntry.project_id == project_id,
+            CourseStreamEntry.user_id == current_user.user_id,
+        )
+        .all()
+    )
+    if not entries:
+        raise HTTPException(status_code=404, detail="No matching stream entries")
+
+    by_id = {entry.id: entry for entry in entries}
+    ordered = [by_id[entry_id] for entry_id in payload.entry_ids if entry_id in by_id]
+
+    parts: list[str] = []
+    for entry in ordered:
+        label = entry.entry_type.capitalize()
+        parts.append(f"[{label}] {entry.content.strip()}")
+    combined = "\n\n".join(parts).strip()
+    if not combined:
+        raise HTTPException(status_code=400, detail="Selected entries have no content")
+
+    title = payload.title or f"Course room selection ({len(ordered)} entries)"
+
+    now = utc_now_iso()
+    source = Source(
+        id=str(uuid4()),
+        project_id=project_id,
+        title=title[:200],
+        type="text",
+        status="ready",
+        text=combined,
+        purpose="lecture_notes",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(source)
+    db.commit()
+    db.refresh(source)
+    index_source_chunks(db, source)
+
+    return {
+        "id": source.id,
+        "project_id": source.project_id,
+        "title": source.title,
+        "type": source.type,
+        "status": source.status,
+        "purpose": source.purpose,
+        "created_at": source.created_at,
+        "updated_at": source.updated_at,
+    }
 
 
 @router.delete("/projects/{project_id}/stream/entries/{entry_id}")

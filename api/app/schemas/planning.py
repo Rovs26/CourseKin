@@ -47,12 +47,17 @@ class CoverageTopicRow(BaseModel):
     cards_due: int
     cards_total: int
     coverage: Literal["untested", "weak", "developing", "strong"]
+    weight_percent: Optional[float] = None
+    study_priority_rank: float = 0.0
 
 
 class ObligationReadinessResponse(BaseModel):
     obligation_id: str
     topics: list[CoverageTopicRow]
     overall_readiness_percent: Optional[int] = None
+    exam_readiness_percent: Optional[int] = None
+    has_weights: bool = False
+    review_order: list[str] = Field(default_factory=list)
     topics_total: int
     topics_untested: int
 
@@ -64,6 +69,27 @@ class ObligationCoverageRow(BaseModel):
     topics_total: int
     topics_untested: int
     overall_readiness_percent: Optional[int] = None
+
+
+class SourceCoverageEntry(BaseModel):
+    source_id: str
+    title: str
+    purpose: str
+    match_count: int
+
+
+class TopicSourceCoverageRow(BaseModel):
+    topic: str
+    covered: bool
+    match_count: int
+    sources: list[SourceCoverageEntry] = Field(default_factory=list)
+
+
+class ObligationSourceCoverageResponse(BaseModel):
+    obligation_id: str
+    topics: list[TopicSourceCoverageRow]
+    covered_count: int
+    missing_topics: list[str] = Field(default_factory=list)
 
 
 class ProjectCoverageResponse(BaseModel):
@@ -92,6 +118,7 @@ class CourseObligationResponse(BaseModel):
     confidence: Confidence
     uncertain_fields: list[str] = Field(default_factory=list)
     topics: list[str] = Field(default_factory=list)
+    topic_weights: Optional[dict[str, float]] = None
     status: ObligationStatus
     created_at: str
     updated_at: str

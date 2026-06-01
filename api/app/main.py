@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.core.rate_limit import limiter
-from app.api.routes import health, projects, sources, jobs, reviewer, planning, stream, notebook, templates, admin, users, billing
+from app.api.routes import health, projects, sources, jobs, reviewer, planning, stream, notebook, templates, admin, users, billing, audio, exams, calendar_export, planner
 from app.db.database import Base, engine
 from app.db import models  # noqa: F401 — imported so SQLAlchemy registers all tables
 
@@ -113,5 +113,9 @@ app.include_router(templates.router)
 app.include_router(admin.router)
 app.include_router(users.router)
 app.include_router(billing.router)
+app.include_router(audio.router)
+app.include_router(exams.router)
+app.include_router(calendar_export.router)
+app.include_router(planner.router)
 
 logger.info("CourseKin API started (env=%s)", settings.APP_ENV)

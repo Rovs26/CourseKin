@@ -12,6 +12,7 @@ import { DefinitionsPanel } from "@/components/reviewer/definitions-panel";
 import { QAPanel } from "@/components/reviewer/qa-panel";
 import { QuizPanel } from "@/components/reviewer/quiz-panel";
 import { FlashcardsPanel } from "@/components/reviewer/flashcards-panel";
+import { ChatPanel } from "@/components/reviewer/chat-panel";
 
 export type ReviewerSectionKey =
   | "summary"
@@ -19,7 +20,8 @@ export type ReviewerSectionKey =
   | "definitions"
   | "qa"
   | "quiz"
-  | "flashcards";
+  | "flashcards"
+  | "chat";
 
 export function ReviewerTabs({
   content,
@@ -94,16 +96,24 @@ export function ReviewerTabs({
                 >
                   Flashcards
                 </TabsTrigger>
+                <TabsTrigger
+                  value="chat"
+                  className="text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-900"
+                >
+                  Chat
+                </TabsTrigger>
               </TabsList>
 
-              <Button
-                variant="outline"
-                className="rounded-xl border-slate-200 bg-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                onClick={() => onRegenerateSection?.(activeTab)}
-                disabled={!onRegenerateSection || isRegeneratingSection}
-              >
-                {isRegeneratingSection ? "Updating..." : "Update Section"}
-              </Button>
+              {activeTab !== "chat" && (
+                <Button
+                  variant="outline"
+                  className="rounded-xl border-slate-200 bg-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                  onClick={() => onRegenerateSection?.(activeTab)}
+                  disabled={!onRegenerateSection || isRegeneratingSection}
+                >
+                  {isRegeneratingSection ? "Updating..." : "Update Section"}
+                </Button>
+              )}
             </div>
           </div>
 
@@ -113,6 +123,7 @@ export function ReviewerTabs({
                 summary={content.summary}
                 evidence={content._evidence?.summary}
                 onFeedback={recordFeedback("summary")}
+                projectId={projectId}
               />
             </TabsContent>
 
@@ -121,6 +132,7 @@ export function ReviewerTabs({
                 keyPoints={content.key_points}
                 evidence={content._evidence?.key_points}
                 onFeedback={(index, rating) => recordFeedback("key_points", index)(rating)}
+                projectId={projectId}
               />
             </TabsContent>
 
@@ -129,6 +141,7 @@ export function ReviewerTabs({
                 definitions={content.definitions}
                 evidence={content._evidence?.definitions}
                 onFeedback={(index, rating) => recordFeedback("definitions", index)(rating)}
+                projectId={projectId}
               />
             </TabsContent>
 
@@ -137,6 +150,7 @@ export function ReviewerTabs({
                 items={content.qa}
                 evidence={content._evidence?.qa}
                 onFeedback={(index, rating) => recordFeedback("qa", index)(rating)}
+                projectId={projectId}
               />
             </TabsContent>
 
@@ -156,7 +170,12 @@ export function ReviewerTabs({
                 cards={content.flashcards}
                 evidence={content._evidence?.flashcards}
                 onFeedback={(index, rating) => recordFeedback("flashcards", index)(rating)}
+                projectId={projectId}
               />
+            </TabsContent>
+
+            <TabsContent value="chat">
+              <ChatPanel projectId={projectId} />
             </TabsContent>
           </div>
         </Tabs>

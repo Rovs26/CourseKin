@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowRight, BookOpen, CalendarRange, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ProjectCard } from "@/components/dashboard/project-card";
+import { TodaySnapshot } from "@/components/dashboard/today-snapshot";
 import { UpcomingPreparation } from "@/components/dashboard/upcoming-preparation";
+import { StudyAssistant } from "@/features/planner/study-assistant";
 import { EmptyState } from "@/components/states/empty-state";
 import { useUser } from "@clerk/nextjs";
 import { useProjectSummaries } from "@/hooks/use-project-summaries";
@@ -14,6 +18,8 @@ export default function DashboardPage() {
   const { summaries, isLoading, error } = useProjectSummaries();
   const visibleSummaries = summaries.slice(0, 4);
   const firstName = user?.firstName ?? "there";
+
+  const showGettingStarted = !isLoading && !error && summaries.length === 0;
 
   return (
     <div className="space-y-8">
@@ -34,7 +40,65 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      <UpcomingPreparation />
+      {showGettingStarted ? (
+        <section className="relative overflow-hidden rounded-3xl border border-white/50 bg-gradient-to-br from-violet-50 via-white to-sky-50 p-6 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.18)]">
+          <div className="absolute inset-0 -z-10 bg-white/40 backdrop-blur-2xl" />
+          <div className="flex items-start gap-3">
+            <Sparkles className="mt-0.5 h-6 w-6 shrink-0 text-violet-500" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-slate-900">
+                Get started in three steps
+              </p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                A short setup so CourseKin can plan your term and keep your notebook tidy.
+              </p>
+              <ol className="mt-4 grid gap-3 sm:grid-cols-3">
+                <li className="rounded-2xl border border-white/60 bg-white/70 p-3 backdrop-blur-md">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-violet-600">
+                    <BookOpen className="h-4 w-4" />
+                    1. Add a course
+                  </div>
+                  <p className="mt-1 text-sm text-slate-700">
+                    Course name, code, term. Two minutes.
+                  </p>
+                </li>
+                <li className="rounded-2xl border border-white/60 bg-white/70 p-3 backdrop-blur-md">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-violet-600">
+                    <Sparkles className="h-4 w-4" />
+                    2. Upload syllabus
+                  </div>
+                  <p className="mt-1 text-sm text-slate-700">
+                    We extract dates and topics for review.
+                  </p>
+                </li>
+                <li className="rounded-2xl border border-white/60 bg-white/70 p-3 backdrop-blur-md">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-violet-600">
+                    <CalendarRange className="h-4 w-4" />
+                    3. Plan the term
+                  </div>
+                  <p className="mt-1 text-sm text-slate-700">
+                    Confirm dates, get study sessions on your calendar.
+                  </p>
+                </li>
+              </ol>
+              <Button asChild className="mt-5">
+                <Link href={routes.newCourse}>
+                  Add your first course
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <div className="space-y-6">
+          <TodaySnapshot />
+          <div className="grid gap-6 lg:grid-cols-2">
+            <UpcomingPreparation />
+            <StudyAssistant compact />
+          </div>
+        </div>
+      )}
 
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-4">
@@ -47,7 +111,11 @@ export default function DashboardPage() {
         </div>
 
         {isLoading ? (
-          <p className="text-sm text-slate-500">Loading courses...</p>
+          <div className="grid gap-4 md:grid-cols-2">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-40 w-full rounded-2xl" />
+            ))}
+          </div>
         ) : error ? (
           <EmptyState title="Unable to load courses" description={error} />
         ) : visibleSummaries.length > 0 ? (

@@ -6,10 +6,12 @@ export function KeyPointsPanel({
   keyPoints,
   evidence,
   onFeedback,
+  projectId,
 }: {
   keyPoints: string[];
   evidence?: ReviewerEvidenceItem[];
   onFeedback?: (index: number, rating: ReviewerFeedbackRating) => Promise<void>;
+  projectId?: string;
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -22,6 +24,7 @@ export function KeyPointsPanel({
               <EvidenceCitations
                 evidence={evidence?.[index]}
                 onFeedback={onFeedback ? (rating) => onFeedback(index, rating) : undefined}
+                projectId={projectId}
               />
             </div>
           </div>
