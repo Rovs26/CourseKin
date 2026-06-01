@@ -34,3 +34,6 @@ n8n/
 # Clerk
 .clerk/
 frontend/.clerk/
+
+# Claude Code local config
+.claude/
